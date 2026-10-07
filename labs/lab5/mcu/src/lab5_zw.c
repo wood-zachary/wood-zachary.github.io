@@ -3,7 +3,7 @@
 
 #include "main.h"
 
-static volatile int32_t encoder_count = 0;
+static volatile uint32_t encoder_count = 0;
 
 int main(void) {
     // Configure encoder pins as inputs
@@ -37,11 +37,27 @@ int main(void) {
     // Enable interrupts globally
     __enable_irq();
 
-    while(1){
-        // start
+    while(1) {
+        uint32_t start = encoder_count;
+
         delay_millis(WINDOW_TIM, WINDOW_MS);
-        // delta
-        // compute speed and direction
+
+        // Unsigned subtraction is always exact across counter wraparound
+        // The cast recovers the sign but is only valid while |net counts per window| < 2^31,
+        // which is around 1.3 million revolutions per second with CPR = 1632
+        int32_t delta = (int32_t)(encoder_count - start);
+
+        float speed = (float)delta * MS_PER_S / (ENCODER_CPR * WINDOW_MS);
+
+        // Resolution is 1 count per window, 1/1632 = 6.1e-4 revolutions per second
+        // at WINDOW_MS = 1000, so digits past the 4th decimal carry no information.
+        if (delta > 0) {
+            printf("Forward: %.4f revolutions per second\n", speed);
+        } else if (delta < 0) {
+            printf("Reverse: %.4f revolutions per second\n", -speed);
+        } else {
+            printf("Motor stopped: zero revolutions per second.\n");
+        }
     }
 
 }
