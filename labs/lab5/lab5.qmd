@@ -1,69 +1,101 @@
 ---
+title: "Lab 5: Interrupts"
 author: "Zachary Wood"
 date: "10/7/26"
+image: images/lab5_schematic.png  # TODO: change to the flowchart. Also update the schematic pin.
 categories:
   - labreport
-draft: true
+draft: false
+description: >-
+  Measured the speed and direction of a brushed DC motor by decoding its
+  quadrature encoder with GPIO interrupts on the STM32L432KC.
 ---
-
-## Lab 5: Interrupts
-
 ## Introduction
 
-Briefly explain what was done.
-
-<!-- TODO -->
+The goal of this lab was to measure the angular velocity and direction of a brushed DC motor with the STM32L432KC. The MCU decodes the motor's quadrature encoder with interrupts on both edges of both channels and prints the direction and speed to the debug terminal every second.
 
 ## Design and Testing Methodology
 
-Explain how you approached the design of this assignment from both a software and a hardware standpoint (as appropriate). Include how you tested your design. These tests should convince the reader that the requirements of the assignment have been met.
+### MCU Implementation
+
+The design builds on the GPIO, RCC, flash, and timer libraries from the course's interrupt tutorial. I fixed one bug in the timer library: `delay_millis()` set ARR to the requested delay, but the counter rolls over after ARR + 1 ticks, so every delay lasted 1 ms too long. It now sets ARR = ms - 1.
+
+I wrote a new library, `STM32L432KC_EXTI`, with one function, `extiEnableEdges(pin, irq)`. It enables the SYSCFG clock, routes the pin to its EXTI line in SYSCFG_EXTICRx, unmasks the line in EXTI_IMR1, enables both the rising and falling triggers in EXTI_RTSR1 and EXTI_FTSR1, and enables the line's interrupt in the NVIC.
+
+EXTI line *n* can only be driven by pin *n* of one port, so the two encoder channels must use different pin numbers. Encoder A is on PB1 (EXTI1, handled by `EXTI1_IRQHandler`) and encoder B is on PB5 (EXTI5, handled by `EXTI9_5_IRQHandler`).
+
+Each handler clears its pending flag, reads both channels, and increments or decrements a shared `volatile` counter. Forward rotation steps (A, B) through 00, 10, 11, 01, so after an edge on A the two channels differ (A != B), and after an edge on B they match (A == B). Reverse rotation produces the opposite result, so:
+
+| Handler | Forward (count up) | Reverse (count down) |
+|---|---|---|
+| `EXTI1_IRQHandler` (A changed) | A != B | A == B |
+| `EXTI9_5_IRQHandler` (B changed) | A == B | A != B |
+
+The handlers do no timing or arithmetic. The main loop records the encoder counter, waits 1000 ms with TIM2, and takes the difference in the encoder counter. The encoder counter is a free-running `uint32_t`, so the unsigned difference is exact across wraparound, and casting it to `int32_t` gives the signed net count. The sign is the direction, and a stopped motor gives a difference of zero, meaning the motor is stopped.
+
+<!-- TODO: flowchart stuff -->
+
+### Hardware
+
+The encoder is powered from the development board's 5 V rail, and its A and B outputs connect directly to PB1 and PB5. Both pins are 5 V tolerant (FT) according to Table 14 of the STM32L432KC datasheet and are not connected to pins that are not 5 V tolerant according to UM1956 Table 8. The internal pull resistors are left disabled, because Table 57 of the datasheet requires them to be disabled when a pin is held above V_DD + 0.3 V. The motor is powered by an external bench supply.
+
+### Testing
 
 <!-- TODO -->
 
 ## Technical Documentation
 
-Include a link to a Git repository with your Verilog code, a block diagram of your design, and schematics of your circuits.
-
-The source code for this lab is available in [the associated Git repository](#).
-
-<!-- TODO -->
-
-### Block Diagram
-
-Insert block diagram image. Every net and port must be labeled, including submodule port names even when they match the top-level net name.
-
-<!-- TODO -->
+The source code for the project can be found in the associated [Github repository](https://github.com/wood-zachary/hmc-e155-portfolio/tree/main/labs/lab5).
 
 ### Schematic
 
-Insert schematic image and note component values
+Figure 1 shows the schematic of the physical circuit. On-board components, including the Nucleo-L432KC, are documented in the [development board schematic](https://hmc-e155.github.io/assets/doc/E155%20Development%20Board%20Schematic.pdf).
 
-<!-- TODO -->
+![Figure 1: Schematic of the physical circuit.](images/lab5_schematic.png)
 
 #### Calculations
 
-<!-- TODO -->
+**Resolution.** The encoder produces 408 pulses per channel per revolution. Counting both edges of both channels gives
+
+$$CPR = 4 \times 408 = 1632 \text{ counts/rev}$$
+
+**Velocity.** With $\Delta$ net counts in a window of $T = 1$ s,
+
+$$\omega = \frac{\Delta}{CPR \cdot T} \text{ rev/s}$$
+
+One count is the smallest measurable change, so the resolution, and the lowest non-zero speed the design reports, is
+
+$$\omega_{min} = \frac{1}{1632 \times 1\text{ s}} = 6.13 \times 10^{-4}\text{ rev/s}$$
+
+**Update rate.** Each loop takes the 1 s window plus the time to print, so the display updates once per window, at about 1 Hz.
+
+**Expected reading.** At the motor's rated 2.5 rev/s, the expected count per window is
+
+$$\Delta = 2.5 \times 1632 \times 1 = 4080$$
+
+and edges arrive every $1/(2.5 \times 1632) = 245\ \mu\text{s}$ on average.
+
+<!-- TODO: measured speed at 12 V vs. 2.5 rev/s -->
+
+### Interrupts vs. Polling
+
+A polling design must sample both channels at least once between consecutive edges or else it would miss transitions. At 2.5 revolutions per second, that interval averages $245\ \mu\text{s}$, and it shrinks in proportion to speed. Any work in the polling loop, such as a call to `printf`, adds to the sampling interval, so the loop either misses edges at high speed or cannot do anything else.
+
+With interrupts, the hardware latches each edge in EXTI_PR1 as soon as it occurs, and the main loop is free to block in a delay or print. An edge is only lost if a second edge on the same line arrives before the handler clears the first, so the maximum speed is set by the handler's duration rather than by the main loop.
 
 ## Results and Discussion
-
-Did you accomplish all of the prescribed tasks? If not, what are the shortcomings? How might you address them given more time? As appropriate, how did the design perform (e.g., How fast/accurate/reliable was it?).
-
-<!-- TODO -->
-
-### Testbench Simulation
-
-Insert waveform screenshots.
 
 <!-- TODO -->
 
 ## Conclusion
 
-Briefly summarize what was done and how it performed. Also note how many hours you spent working on the lab.
+The design measured the speed and direction of a DC motor by counting both edges of both encoder channels with interrupts, using an EXTI driver written from the reference manual.
 
+::: {.callout-note collapse="true"}
+## Hours spent (click to expand)
 <!-- TODO -->
+:::
 
 ## AI Prototype Summary
-
-Include generated code, chat transcripts, and a reflection on how well it worked
 
 <!-- TODO -->

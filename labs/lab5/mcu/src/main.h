@@ -7,10 +7,9 @@
 // Custom defines
 ///////////////////////////////////////////////////////////////////////////////
 
-// PB1 and PB7 are adjacent on the breakout board, both are FT, both are
-// on port B, and they have separate EXTI lines and handlers.
+// PB1 and PB5 are both FT, both on port B, and have separate EXTI lines and handlers.
 #define ENCODER_A_PIN PB1  // DS11451 Tables 13-14, FT Pins
-#define ENCODER_B_PIN PB7  // DS11451 Tables 13-14, FT Pins
+#define ENCODER_B_PIN PB5  // DS11451 Tables 13-14, FT Pins
 
 #define WINDOW_TIM TIM2
 #define WINDOW_MS 1000

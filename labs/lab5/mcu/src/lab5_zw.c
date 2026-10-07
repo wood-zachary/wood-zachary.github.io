@@ -15,26 +15,9 @@ int main(void) {
     RCC->APB1ENR1 |= RCC_APB1ENR1_TIM2EN;
     initTIM(WINDOW_TIM);
 
-    // Enable SYSCFG clock domain in RCC
-    RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
-
-    // Route EXTI1 to PB1 and EXTI7 to PB7
-    // Field mask clears bits and field value sets bits
-    SYSCFG->EXTICR[0] = (SYSCFG->EXTICR[0] & ~SYSCFG_EXTICR1_EXTI1) | SYSCFG_EXTICR1_EXTI1_PB;
-    SYSCFG->EXTICR[1] = (SYSCFG->EXTICR[1] & ~SYSCFG_EXTICR2_EXTI7) | SYSCFG_EXTICR2_EXTI7_PB;
-
-    // Configure interrupt for rising and falling edges of GPIO pins for encoder
-    EXTI->IMR1 |= (1 << gpioPinOffset(ENCODER_A_PIN));   // Configure mask bit
-    EXTI->RTSR1 |= (1 << gpioPinOffset(ENCODER_A_PIN));  // Enable rising edge trigger
-    EXTI->FTSR1 |= (1 << gpioPinOffset(ENCODER_A_PIN));  // Enable falling edge trigger
-    NVIC_EnableIRQ(EXTI1_IRQn);                          // PB1 on EXTI1
-
-    EXTI->IMR1 |= (1 << gpioPinOffset(ENCODER_B_PIN));   // Configure mask bit
-    EXTI->RTSR1 |= (1 << gpioPinOffset(ENCODER_B_PIN));  // Enable rising edge trigger
-    EXTI->FTSR1 |= (1 << gpioPinOffset(ENCODER_B_PIN));  // Enable falling edge trigger
-    NVIC_EnableIRQ(EXTI9_5_IRQn);                        // PB7 on EXTI7, which is shared with lines 5-9
-
-    // Enable interrupts globally
+    // Interrupt on both edges of both encoder channels
+    extiEnableEdges(ENCODER_A_PIN, EXTI1_IRQn);
+    extiEnableEdges(ENCODER_B_PIN, EXTI9_5_IRQn);
     __enable_irq();
 
     while(1) {
@@ -82,8 +65,8 @@ void EXTI1_IRQHandler(void){
 }
 
 void EXTI9_5_IRQHandler(void){
-    if (EXTI->PR1 & EXTI_PR1_PIF7) {
-        EXTI->PR1 = EXTI_PR1_PIF7;  // clear the interrupt by writing 1
+    if (EXTI->PR1 & EXTI_PR1_PIF5) {
+        EXTI->PR1 = EXTI_PR1_PIF5;  // clear the interrupt by writing 1
 
         // B just changed, so A == B if the encoder is moving forward
         if (digitalRead(ENCODER_A_PIN) == digitalRead(ENCODER_B_PIN)) {
