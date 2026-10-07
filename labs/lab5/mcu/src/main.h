@@ -12,7 +12,7 @@
 #define ENCODER_B_PIN PB5  // DS11451 Tables 13-14, FT Pins
 
 #define WINDOW_TIM TIM2
-#define WINDOW_MS 1000
+#define WINDOW_MS 500
 #define MS_PER_S 1000.0f
 
 #define ENCODER_PPR 408              // Pulses per channel per revolution

@@ -11,7 +11,7 @@ int main(void) {
     pinMode(ENCODER_A_PIN, GPIO_INPUT);
     pinMode(ENCODER_B_PIN, GPIO_INPUT);
 
-    // Initialize timer
+    // Clock the window timer and give it a 1 ms tick
     RCC->APB1ENR1 |= RCC_APB1ENR1_TIM2EN;
     initTIM(WINDOW_TIM);
 
@@ -25,19 +25,20 @@ int main(void) {
 
         delay_millis(WINDOW_TIM, WINDOW_MS);
 
-        // Unsigned subtraction is always exact across counter wraparound
+        // Unsigned subtraction is exact across counter wraparound
         // The cast recovers the sign but is only valid while |net counts per window| < 2^31,
-        // which is around 1.3 million revolutions per second with CPR = 1632
+        // which is about 2.6 million rev/s with CPR = 1632 and a 0.5 s window.
         int32_t delta = (int32_t)(encoder_count - start);
 
+        // rev/s = counts / (counts per revolution x window length in seconds)
         float speed = (float)delta * MS_PER_S / (ENCODER_CPR * WINDOW_MS);
 
-        // Resolution is 1 count per window, 1/1632 = 6.1e-4 revolutions per second
-        // at WINDOW_MS = 1000, so digits past the 4th decimal carry no information.
+        // Resolution is 1 count per window, 1/(1632 x 0.5) = 1.2e-3 revolutions per second
+        // at WINDOW_MS = 500, so digits past the 3rd decimal carry no information.
         if (delta > 0) {
-            printf("Forward: %.4f revolutions per second\n", speed);
+            printf("Forward: %.3f revolutions per second\n", speed);
         } else if (delta < 0) {
-            printf("Reverse: %.4f revolutions per second\n", -speed);
+            printf("Reverse: %.3f revolutions per second\n", -speed);
         } else {
             printf("Motor stopped: zero revolutions per second.\n");
         }
@@ -53,7 +54,7 @@ int main(void) {
 
 void EXTI1_IRQHandler(void){
     if (EXTI->PR1 & EXTI_PR1_PIF1) {
-        EXTI->PR1 = EXTI_PR1_PIF1;  // clear the interrupt by writing 1
+        EXTI->PR1 = EXTI_PR1_PIF1;  // Clear the flag by writing 1
 
         // A just changed, so A != B if the encoder is moving forward
         if (digitalRead(ENCODER_A_PIN) != digitalRead(ENCODER_B_PIN)) {
@@ -66,7 +67,7 @@ void EXTI1_IRQHandler(void){
 
 void EXTI9_5_IRQHandler(void){
     if (EXTI->PR1 & EXTI_PR1_PIF5) {
-        EXTI->PR1 = EXTI_PR1_PIF5;  // clear the interrupt by writing 1
+        EXTI->PR1 = EXTI_PR1_PIF5;  // Clear the flag by writing 1
 
         // B just changed, so A == B if the encoder is moving forward
         if (digitalRead(ENCODER_A_PIN) == digitalRead(ENCODER_B_PIN)) {
