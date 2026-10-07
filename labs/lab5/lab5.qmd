@@ -2,7 +2,7 @@
 title: "Lab 5: Interrupts"
 author: "Zachary Wood"
 date: "10/7/26"
-image: images/lab5_schematic.png  # TODO: change to the flowchart. Also update the schematic pin.
+image: images/lab5_flowchart.png
 categories:
   - labreport
 draft: false
@@ -33,7 +33,9 @@ Each handler clears its pending flag, reads both channels, and increments or dec
 
 The handlers do no timing or arithmetic. The main loop records the encoder counter, waits 500 ms with TIM2, and takes the difference in the encoder counter. The encoder counter is a free-running `uint32_t`, so the unsigned difference is exact across wraparound, and casting it to `int32_t` gives the signed net count. The sign is the direction, and a stopped motor gives a difference of zero, meaning the motor is stopped.
 
-<!-- TODO: flowchart stuff -->
+Figure 1 shows the main loop and both interrupt handlers. They communicate only through `encoder_count` (red arrows).
+
+![Figure 1: Flowchart of the main loop and the two interrupt handlers.](images/lab5_flowchart.png)
 
 ### Hardware
 
@@ -49,9 +51,9 @@ The source code for the project can be found in the associated [Github repositor
 
 ### Schematic
 
-Figure 1 shows the schematic of the physical circuit. On-board components, including the Nucleo-L432KC, are documented in the [development board schematic](https://hmc-e155.github.io/assets/doc/E155%20Development%20Board%20Schematic.pdf).
+Figure 2 shows the schematic of the physical circuit. On-board components, including the Nucleo-L432KC, are documented in the [development board schematic](https://hmc-e155.github.io/assets/doc/E155%20Development%20Board%20Schematic.pdf).
 
-![Figure 1: Schematic of the physical circuit.](images/lab5_schematic.png)
+![Figure 2: Schematic of the physical circuit.](images/lab5_schematic.png)
 
 #### Calculations
 
