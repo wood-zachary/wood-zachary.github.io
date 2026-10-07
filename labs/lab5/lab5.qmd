@@ -10,6 +10,7 @@ description: >-
   Measured the speed and direction of a brushed DC motor by decoding its
   quadrature encoder with GPIO interrupts on the STM32L432KC.
 ---
+
 ## Introduction
 
 The goal of this lab was to measure the angular velocity and direction of a brushed DC motor with the STM32L432KC. The MCU decodes the motor's quadrature encoder with interrupts on both edges of both channels and prints the direction and speed to the debug terminal twice per second.
@@ -43,7 +44,7 @@ The encoder is powered from the development board's 5 V rail, and its A and B ou
 
 ### Testing
 
-<!-- TODO -->
+I ran the motor from 0 V to 12 V on the bench supply and compared the printed speed with the nominal 2.5 rev/s at 12 V. I reversed the supply leads to check that the reported direction changed, turned the supply off to check that the speed read zero, and lowered the voltage until the motor barely turned to check that the speed stayed non-zero.
 
 ## Technical Documentation
 
@@ -77,7 +78,7 @@ $$\Delta = 2.5 \times 1632 \times 0.5 = 2040$$
 
 and edges arrive every $1/(2.5 \times 1632) = 245\ \mu\text{s}$ on average.
 
-<!-- TODO: measured speed at 12 V vs. 2.5 rev/s -->
+**Measured reading.** At 12 V the design reported 2.8 rev/s, about 2285 counts per window, which is 12% above the nominal 2.5 rev/s that the lab gives as approximate. Reversing the supply reversed the reported direction.
 
 ### Interrupts vs. Polling
 
@@ -87,7 +88,7 @@ With interrupts, the hardware latches each edge in EXTI_PR1 as soon as it occurs
 
 ## Results and Discussion
 
-<!-- TODO -->
+The design meets all of the lab's proficiency and excellence requirements. It reported 2.8 rev/s at 12 V, 0.2 rev/s at 1 V, 0.05 rev/s at 0.3 V, and zero with the supply off, and the reported direction followed the supply polarity. It counts both edges of both channels with interrupts, updates at just under 2 Hz, and connects the encoder only to 5 V tolerant pins.
 
 ## Conclusion
 
@@ -248,6 +249,62 @@ int32_t encoder_timer_get_count(void)
 ```
 :::
 
-<!-- TODO: plug the generated interrupt code in on hardware. Does it run, and how does it compare with my design? -->
+I then asked it to adapt the decoder to my code ("Make my main use it:" followed by my `lab5_zw.c`). It kept my pins and main loop, replaced the two `digitalRead` calls with one read of GPIOB->IDR, called the state table from both handlers, and set both handlers to the same NVIC priority. The adapted version ran at 12 V and its readings appeared consistent with my design.
 
-<!-- TODO: short reflection on the quality of the output -->
+::: {.callout-tip collapse="true"}
+## Adapted lab5_zw.c (decoder and handlers)
+```c
+#define ENC_A_BIT           1U
+#define ENC_B_BIT           5U
+#define ENC_IRQ_PRIORITY    1U
+
+static volatile uint32_t encoder_count  = 0;
+static volatile uint32_t encoder_errors = 0;
+static uint32_t          encoder_state  = 0;
+
+// State s = (A << 1) | B; table index = (s_prev << 2) | s_next.
+static const int8_t encoder_table[16] = {
+     0, -1,  1,  0,
+     1,  0,  0, -1,
+    -1,  0,  0,  1,
+     0,  1, -1,  0
+};
+
+static uint32_t encoder_read_state(void) {
+    uint32_t idr = GPIOB->IDR;
+    uint32_t a = (idr >> ENC_A_BIT) & 1U;
+    uint32_t b = (idr >> ENC_B_BIT) & 1U;
+
+    return (a << 1) | b;
+}
+
+static void encoder_update(void) {
+    uint32_t next = encoder_read_state();
+    int8_t delta = encoder_table[(encoder_state << 2) | next];
+
+    if (delta != 0) {
+        encoder_count += (uint32_t)(int32_t)delta;
+    } else if (next != encoder_state) {
+        encoder_errors++;
+    }
+
+    encoder_state = next;
+}
+
+void EXTI1_IRQHandler(void) {
+    if (EXTI->PR1 & EXTI_PR1_PIF1) {
+        EXTI->PR1 = EXTI_PR1_PIF1;
+        encoder_update();
+    }
+}
+
+void EXTI9_5_IRQHandler(void) {
+    if (EXTI->PR1 & EXTI_PR1_PIF5) {
+        EXTI->PR1 = EXTI_PR1_PIF5;
+        encoder_update();
+    }
+}
+```
+:::
+
+The output was solid. The pin advice was correct, including the solder bridges, which I confirmed in UM1956. The state table is  neat and compares against the previous state, so two edges handled late cannot be counted in the wrong direction, and it counts impossible transitions as errors. It is a little harder to read and understand. Two parts did not fit this lab: it enabled pull-ups and recommended the timer's encoder mode.
