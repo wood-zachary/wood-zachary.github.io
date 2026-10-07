@@ -5,6 +5,15 @@
 #include "STM32L432KC_RCC.h"
 
 void initTIM(TIM_TypeDef * TIMx){
+  // Enable the timer's clock in RCC
+  if (TIMx == TIM2) {
+    RCC->APB1ENR1 |= RCC_APB1ENR1_TIM2EN;
+  } else if (TIMx == TIM15) {
+    RCC->APB2ENR |= RCC_APB2ENR_TIM15EN;
+  } else if (TIMx == TIM16) {
+    RCC->APB2ENR |= RCC_APB2ENR_TIM16EN;
+  }
+
   // Set prescaler to give 1 ms time base
   uint32_t psc_div = (uint32_t) ((SystemCoreClock/1e3));
 

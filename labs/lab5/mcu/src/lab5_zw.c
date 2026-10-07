@@ -12,7 +12,6 @@ int main(void) {
     pinMode(ENCODER_B_PIN, GPIO_INPUT);
 
     // Clock the window timer and give it a 1 ms tick
-    RCC->APB1ENR1 |= RCC_APB1ENR1_TIM2EN;
     initTIM(WINDOW_TIM);
 
     // Interrupt on both edges of both encoder channels
