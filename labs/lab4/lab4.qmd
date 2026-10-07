@@ -56,7 +56,7 @@ The potentiometer sets the volume, and it also keeps pin 3 within the LM386's ab
 
 ### Extra Composition
 
-The second song is the melody line of John Dowland's *Tarleton's Jig* (also known as *Tarleton's Willy*), transcribed from a [ukulele arrangement](https://renaissance-ukukele.blogspot.com/2020/10/dowland-tarletons-jig-or-tarletons-willy.html) in 6/8 time. I used an eighth note of 150 ms. Pitches are frequencies rounded to the nearest hertz. Consecutive repeated notes would otherwise merge into one continuous tone, so I shortened the first of each pair by 25 ms and inserted a 25 ms rest.
+The second song is the melody line of John Dowland's *Tarleton's Jig* (also known as *Tarleton's Willy*), transcribed from a [ukulele arrangement](https://renaissance-ukukele.blogspot.com/2020/10/dowland-tarletons-jig-or-tarletons-willy.html) in 6/8 time. I used an eighth note of 300 ms. Pitches are frequencies rounded to the nearest hertz. Consecutive repeated notes would otherwise merge into one continuous tone, so I shortened the first of each pair by 50 ms and inserted a 50 ms rest.
 
 ### Testing
 
