@@ -24,9 +24,9 @@ void extiEnableEdges(int gpio_pin, IRQn_Type irq) {
     SYSCFG->EXTICR[reg] |= (uint32_t)gpioPinToPort(gpio_pin) << shift;
 
     // Unmask the line and trigger on both edges
-    EXTI->IMR1  |= 1U << line;
-    EXTI->RTSR1 |= 1U << line;
-    EXTI->FTSR1 |= 1U << line;
+    EXTI->IMR1  |= 1U << line;   // Interrupt mask: 1 = enabled
+    EXTI->RTSR1 |= 1U << line;   // Rising edge trigger
+    EXTI->FTSR1 |= 1U << line;   // Falling edge trigger
 
     // Enable the line's interrupt in NVIC_ISER
     NVIC_EnableIRQ(irq);

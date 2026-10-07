@@ -12,9 +12,9 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 // SYSCFG_EXTICRx layout (RM0394 9.2.3-9.2.6)
-#define EXTICR_LINES_PER_REG 4
-#define EXTICR_FIELD_WIDTH   4
-#define EXTICR_FIELD_MASK    0x7U
+#define EXTICR_LINES_PER_REG 4     // Each EXTICR register holds 4 lines
+#define EXTICR_FIELD_WIDTH   4     // Each line gets a 4-bit slot
+#define EXTICR_FIELD_MASK    0x7U  // Only the low 3 bits of a slot are used
 
 ///////////////////////////////////////////////////////////////////////////////
 // Function prototypes
