@@ -3,6 +3,8 @@
 
 #include "main.h"
 
+static volatile int32_t encoder_count = 0;
+
 int main(void) {
     // Configure encoder pins as inputs
     gpioEnable(GPIO_PORT_B);
@@ -44,10 +46,34 @@ int main(void) {
 
 }
 
+// EXTI->PR1 = EXTI pending register 1
+// PIFn = pending interrupt flag on line n
+// A leads B by 90 degrees, so the order in which (A, B) changes indicates direction.
+// Forward: 00, 10, 11, 01
+// Reverse: 00, 01, 11, 10
+
 void EXTI1_IRQHandler(void){
-    return;
+    if (EXTI->PR1 & EXTI_PR1_PIF1) {
+        EXTI->PR1 = EXTI_PR1_PIF1;  // clear the interrupt by writing 1
+
+        // A just changed, so A != B if the encoder is moving forward
+        if (digitalRead(ENCODER_A_PIN) != digitalRead(ENCODER_B_PIN)) {
+            encoder_count++;
+        } else {
+            encoder_count--;
+        }
+    }
 }
 
 void EXTI9_5_IRQHandler(void){
-    return;
+    if (EXTI->PR1 & EXTI_PR1_PIF7) {
+        EXTI->PR1 = EXTI_PR1_PIF7;  // clear the interrupt by writing 1
+
+        // B just changed, so A == B if the encoder is moving forward
+        if (digitalRead(ENCODER_A_PIN) == digitalRead(ENCODER_B_PIN)) {
+            encoder_count++;
+        } else {
+            encoder_count--;
+        }
+    }
 }
