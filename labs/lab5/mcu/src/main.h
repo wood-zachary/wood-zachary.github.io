@@ -1,0 +1,21 @@
+#ifndef MAIN_H
+#define MAIN_H
+
+#include "../lib/STM32L432KC.h"
+
+///////////////////////////////////////////////////////////////////////////////
+// Custom defines
+///////////////////////////////////////////////////////////////////////////////
+
+// PB1 and PB5 are both FT, both on port B, and have separate EXTI lines and handlers.
+#define ENCODER_A_PIN PB1  // DS11451 Tables 13-14, FT Pins
+#define ENCODER_B_PIN PB5  // DS11451 Tables 13-14, FT Pins
+
+#define WINDOW_TIM TIM2
+#define WINDOW_MS 500
+#define MS_PER_S 1000.0f
+
+#define ENCODER_PPR 408              // Pulses per channel per revolution
+#define ENCODER_CPR (4*ENCODER_PPR)  // Counts per revolution
+
+#endif // MAIN_H
