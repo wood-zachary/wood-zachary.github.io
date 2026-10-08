@@ -90,6 +90,8 @@ With interrupts, the hardware latches each edge in EXTI_PR1 as soon as it occurs
 
 The design meets all of the lab's proficiency and excellence requirements. It reported 2.8 rev/s at 12 V, 0.2 rev/s at 1 V, 0.05 rev/s at 0.3 V, and zero with the supply off, and the reported direction followed the supply polarity. It counts both edges of both channels with interrupts, updates at just under 2 Hz, and connects the encoder only to 5 V tolerant pins.
 
+The handlers could be made faster. An edge is lost if a second edge on the same line arrives before the handler clears the first, so a shorter handler raises the maximum speed the design can measure and leaves more CPU time for the main loop. Each `digitalRead()` call itself calls `gpioPinToBase()`, `gpioPinToPort()`, `gpioPortToBase()`, and `gpioPinOffset()`, so one edge costs ten function calls. Every call adds a branch, pushes the return address and saved registers onto the stack, and pops them on return, and the project builds without optimization, so none of these calls are inlined. As the AI prototype did, a single read of GPIOB->IDR with masks for bits 1 and 5 replaces all ten calls with one load and two bitwise operations, and it also samples both channels at the same instant. The cost is that the handler would then hardcode port B instead of following the pin definitions in `main.h`.
+
 ## Conclusion
 
 The design measured the speed and direction of a DC motor by counting both edges of both encoder channels with interrupts, using an EXTI driver written from the reference manual.
