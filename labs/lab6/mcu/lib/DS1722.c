@@ -1,4 +1,5 @@
 // DS1722.c
-// Source code for DS1722 peripheral
-
-#include "DS1722.h"
+// TODO: <YOUR NAME>
+// TODO: <YOUR EMAIL>
+// TODO: <DATE>
+// TODO: <SHORT DESCRIPTION OF WHAT THIS FILE DOES>
