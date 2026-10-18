@@ -61,5 +61,22 @@ void initSPI(int br, int cpol, int cpha) {
 }
 
 char spiSendReceive(char send) {
-    return '0';
+    // Derived from rm0394 section 40.4.9
+
+    // Wait until TXE is set
+    while (!(SPI1->SR & SPI_SR_TXE)) {
+
+    }
+
+    // 8-bit write to data register
+    volatile uint8_t* data_reg = (volatile uint8_t*)&SPI1->DR;
+    *data_reg = send;
+
+    // Wait until RXNE is set
+    while (!(SPI1->SR & SPI_SR_RXNE)) {
+
+    }
+
+    // 8-bit read from data register
+    return *data_reg;
 }
