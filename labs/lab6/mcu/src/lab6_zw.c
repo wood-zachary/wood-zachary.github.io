@@ -103,7 +103,7 @@ int main(void) {
         char tempStr[100];
         temp_resolution = updateTempResolution(request, temp_resolution);
         sprintf(tempStr, "The temperature is %.4f degrees Celsius with %d-bit resolution",
-                readTemperature(), temp_resolution);
+                readTemperature(), getResolution());
         
         // Update string with current LED state
         led_status = updateLEDStatus(request, led_status);
