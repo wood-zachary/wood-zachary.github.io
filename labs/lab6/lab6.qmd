@@ -1,9 +1,11 @@
 ---
 author: "Zachary Wood"
-date: "10/14/26"
+date: "10/26/26"
+# TODO: replace with the annotated logic analyzer capture
+image: images/lab6_schematic.png
 categories:
   - labreport
-draft: true
+draft: false
 ---
 
 ## Lab 6: The Internet of Things and Serial Peripheral Interface
@@ -36,9 +38,15 @@ Insert block diagram image. Every net and port must be labeled, including submod
 
 ### Schematic
 
-Insert schematic image and note component values
+Figure 1 shows the schematic of the physical circuit. On-board components, including the Nucleo-L432KC, are documented in the [development board schematic](https://hmc-e155.github.io/assets/doc/E155%20Development%20Board%20Schematic.pdf).
 
-<!-- TODO -->
+![Figure 1: Schematic of the physical circuit.](images/lab6_schematic.png)
+
+The DS1722 requires no external components. Its digital supply VDDD (1.8 V to 5.5 V) and analog supply VDDA (2.65 V to 5.5 V) are both tied to 3.3 V, as well as SERMODE, which makes the chip select the SPI interface. Tying it to ground would instead select the 3-wire interface. CE is driven by PA8 as a GPIO output, and SCLK, SDI, and SDO connect to SPI1's SCK (PB3), MOSI (PB5), and MISO (PB4), respectively.
+
+The ESP8266 click board plugs into the development board's mikroBUS socket (U5). The socket routes its TX and RX pins to USART1 on PA9 and PA10, respectively, and the socket's TX and RX labels name the MCU's side of each line, so the click board receives on the socket's TX pin and transmits on its RX pin. The click's reset pin connects to the socket's RST pin, which jumper J2 selects between a 10 kΩ pull-up to 3.3 V (R3, pins 1-2) and PA12 (pins 2-3). J2 is set to pins 1-2, which holds the reset line high so the ESP8266 runs whenever it is powered.
+
+The LED is the development board's D4, driven by PA6 through its 1 kΩ series resistor R7. The MCU/FPGA DIP switch SW7 is set open, which disconnects PA10, PA9, PA5, PA6, PA11, PB5, PB4, and PB3 from the FPGA.
 
 #### Calculations
 
