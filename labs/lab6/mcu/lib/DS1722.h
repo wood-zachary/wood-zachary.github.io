@@ -11,7 +11,7 @@
 // Definitions
 ///////////////////////////////////////////////////////////////////////////////
 
-#define DS1722_CE PA8
+#define DS1722_CE PB1
 
 // ds1722 Register Address Structure Table 4 
 #define DS1722_CFG_READ 0x00
@@ -40,5 +40,7 @@ void initDS1722();
 float readTemperature();
 
 void setResolution(int bits);
+
+int getResolution();
 
 #endif

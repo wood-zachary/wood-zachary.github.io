@@ -56,3 +56,14 @@ void setResolution(int bits) {
 
     writeRegister(DS1722_CFG_WRITE, cfg);
 }
+
+int getResolution() {
+    uint8_t cfg = readRegister(DS1722_CFG_READ);
+    int code = (cfg & (DS1722_CFG_R0_Msk | DS1722_CFG_R1_Msk | DS1722_CFG_R2_Msk)) >> DS1722_CFG_R0_Pos;
+
+    if (code >= 4) {
+        return 12;
+    }
+
+    return code + 8;
+}
