@@ -1,22 +1,29 @@
 `timescale 10ns/1ns
 
-/////////////////////////////////////////////
-// testbench_aes_core
+////////////////////////////////////////////////////////////////////////////////
+// aes_core_tb
 // Tests AES with cases from FIPS-197 appendix
 // Tests aes_core module apart from the SPI load
 // Added 4/28/21 by Josh Brake
 // jbrake@hmc.edu
-/////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
-module testbench_aes_core();
+module aes_core_tb();
     logic clk, load, done;
     logic [127:0] key, plaintext, cyphertext, expected;
-    
+
     // device under test
-    aes_core dut(clk, load, key, plaintext, done, cyphertext);
-    
+    aes_core dut(
+        .clk(clk),
+        .load(load),
+        .key(key),
+        .plaintext(plaintext),
+        .done(done),
+        .cyphertext(cyphertext)
+    );
+
     // test case
-    initial begin   
+    initial begin
     // Test case from FIPS-197 Appendix A.1, B
     key       <= 128'h2B7E151628AED2A6ABF7158809CF4F3C;
     plaintext <= 128'h3243F6A8885A308D313198A2E0370734;
@@ -27,15 +34,15 @@ module testbench_aes_core();
     //      plaintext <= 128'h00112233445566778899AABBCCDDEEFF;
     //      expected  <= 128'h69C4E0D86A7B0430D8CDB78070B4C55A;
     end
-    
+
     // generate clock and load signals
     always begin
-			clk = 1'b0; #5;
-			clk = 1'b1; #5;
+			  clk = 1'b0; #5;
+			  clk = 1'b1; #5;
 		end
-        
+
     initial begin
-      load = 1'b1; #22; load = 1'b0; //Pulse load to start conversion
+        load = 1'b1; #22; load = 1'b0; //Pulse load to start conversion
     end
 
     // wait until done and then check the result
@@ -48,5 +55,5 @@ module testbench_aes_core();
         $stop();
       end
     end
-    
+
 endmodule

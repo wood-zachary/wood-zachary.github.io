@@ -1,13 +1,13 @@
 `timescale 10ns/1ns
-/////////////////////////////////////////////
-// testbench_aes_sbox
+////////////////////////////////////////////////////////////////////////////////
+// aes_sbox_tb
 // Demonstrates 1-cycle latency of RAM blocks doing s-box substitution
-/////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
-module testbench_aes_sbox();
+module aes_sbox_tb();
     logic clk, load, done, sck, sdi, sdo;
     logic [127:0] key, plaintext, cyphertext, expected;
-	  logic [255:0] comb;
+	logic [255:0] comb;
 
     // Added delay
     logic delay;
@@ -29,12 +29,12 @@ module testbench_aes_sbox();
     assign output_bytes_2d[3] = output_bytes_1d[31:0];
 
     logic [7:0] a, y;
-    
+
     // device under test
     sbox_sync dut(.clk(clk), .a(a), .y(y));
-    
+
     // test case
-    initial begin   
+    initial begin
         // Test case from FIPS-197 Appendix A.1, B
         key       <= 128'h2B7E151628AED2A6ABF7158809CF4F3C;
         plaintext <= 128'h3243F6A8885A308D313198A2E0370734;
@@ -45,11 +45,11 @@ module testbench_aes_sbox();
         // plaintext <= 128'h00112233445566778899AABBCCDDEEFF;
         // expected  <= 128'h69C4E0D86A7B0430D8CDB78070B4C55A;
     end
-    
+
     // generate clock and load signals
     always begin
-      clk = 1'b0; #5;
-      clk = 1'b1; #5;
+        clk = 1'b0; #5;
+        clk = 1'b1; #5;
     end
 
     assign input_bytes_1d = key;
@@ -57,17 +57,15 @@ module testbench_aes_sbox();
     // Generate signal to demonstrate one clock cycle latency of the synchronous s-box substitution.
     // You must wait until the next rising edge for the output data (substituted byte) to be valid
     initial begin
-      a = input_bytes_2d[0][31:24];
-      #22;
-      a = input_bytes_2d[0][23:16];
-      #22;
-      a = input_bytes_2d[0][15:8];
-      #22;
-      a = input_bytes_2d[0][7:0];
-      #22;
-      $stop();
+        a = input_bytes_2d[0][31:24];
+        #22;
+        a = input_bytes_2d[0][23:16];
+        #22;
+        a = input_bytes_2d[0][15:8];
+        #22;
+        a = input_bytes_2d[0][7:0];
+        #22;
+        $stop();
     end
 
-  
-    
 endmodule
