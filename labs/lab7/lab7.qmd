@@ -1,12 +1,16 @@
 ---
+title: "Lab 7: The Advanced Encryption Standard"
 author: "Zachary Wood"
 date: "10/28/26"
+image: images/lab7_aes_datapath_block_diagram.png
 categories:
   - labreport
-draft: true
+draft: false
+description: >-
+  Designed an AES-128 encryption accelerator for the iCE40 UP5K FPGA
+  that receives a key and plaintext from the STM32L432KC over SPI and
+  computes one round per clock cycle.
 ---
-
-## Lab 7: The Advanced Encryption Standard
 
 ## Introduction
 
@@ -20,9 +24,13 @@ Explain how you approached the design of this assignment from both a software an
 
 <!-- TODO -->
 
-## Technical Documentation
+### Finite State Machines
 
-Include a link to a Git repository with your Verilog code, a block diagram of your design, and schematics of your circuits.
+The controller (`aes_controller`) consists of two communicating Moore FSMs, both reset by `load`. The round FSM is an instantiation of my `counter` from lab 3. It advances once per cycle while `done` is low, and its state, is decoded into `first` (round 0, the initial AddRoundKey) and `last` (round 10, which skips MixColumns). The done FSM is a single register that moves from WAIT to DONE when `last` is asserted. `done` therefore comes directly from a flip-flop and rises on the same edge that the cyphertext register captures the result, and it holds the counter at 11 until the next `load`.
+
+![Figure 1: State transition diagrams for the two FSMs in `aes_controller`.](images/lab7_aes_controller_fsms.png)
+
+## Technical Documentation
 
 The source code for this lab is available in [the associated Git repository](#).
 
@@ -30,9 +38,68 @@ The source code for this lab is available in [the associated Git repository](#).
 
 ### Block Diagram
 
-Insert block diagram image. Every net and port must be labeled, including submodule port names even when they match the top-level net name.
+Figure 2 shows the top-level module `aes`. `spi` shifts the plaintext and key in from the MCU and shifts the cyphertext back out while `core` computes the cyphertext. `done` is both an output to the MCU and an input to `spi`, which uses it to capture the cyphertext before shifting it out.
 
-<!-- TODO -->
+![Figure 2: Block diagram of the `aes` SystemVerilog module.](images/lab7_aes_block_diagram.png)
+
+Figure 3 shows `aes_core`. Since `load` is asynchronous to `clk`, it passes through a two-stage synchronizer before reaching the controller. The controller generates `first`, `last`, and `done`, and the datapath (`dp`) computes the cyphertext.
+
+::: {.callout-note collapse="true"}
+## `aes_core` block diagram (click to expand)
+![Figure 3: Block diagram of the `aes_core` SystemVerilog module.](images/lab7_aes_core_block_diagram.png)
+:::
+
+Figure 4 shows `aes_controller`, which implements the two FSMs in Figure 1. `round_cnt` holds the round number, and equality comparators decode it into `first` and `last`. The `done` register is enabled by `last` and loads a constant 1, and its inverted output enables the counter.
+
+::: {.callout-note collapse="true"}
+## `aes_controller` block diagram (click to expand)
+![Figure 4: Block diagram of the `aes_controller` SystemVerilog module.](images/lab7_aes_controller_block_diagram.png)
+:::
+
+Figure 5 shows `aes_datapath`, which computes one round per cycle. The output of AddRoundKey (`ark_out`) feeds back into SubBytes (`sb`), whose synchronous sboxes act as the state register. ShiftRows (`sr`) and MixColumns (`mc`) follow, and a multiplexer selected by `last` bypasses MixColumns in the final round. A second multiplexer selected by `first` replaces the round output with `plaintext` for the initial AddRoundKey. The `cyphertext` register captures `ark_out` when `last` is asserted.
+
+::: {.callout-note collapse="true"}
+## `aes_datapath` block diagram (click to expand)
+![Figure 5: Block diagram of the `aes_datapath` SystemVerilog module.](images/lab7_aes_datapath_block_diagram.png)
+:::
+
+Figure 6 shows `keyexpansion`, which produces one round key per cycle. When `first` is asserted, it passes the cypher key through as the round 0 key and loads `rcon` with 0x01. Otherwise, the next-key logic computes the round key from the previous round key (`prev_key`), the rotated and substituted last word of that key (`sw_out`), and the round constant `rcon`. `rw` and `sw` act on the current `roundkey`, so the one-cycle sbox latency in `sw` aligns `sw_out` with `prev_key` in the following cycle.
+
+::: {.callout-note collapse="true"}
+## `keyexpansion` block diagram (click to expand)
+![Figure 6: Block diagram of the `keyexpansion` SystemVerilog module.](images/lab7_keyexpansion_block_diagram.png)
+:::
+
+Figures 7 and 8 show `subbytes` and `subword`, which apply the sbox to each byte of the state and of a word, respectively.
+
+::: {.callout-note collapse="true"}
+## `subbytes` block diagram (click to expand)
+![Figure 7: Block diagram of the `subbytes` SystemVerilog module.](images/lab7_subbytes_block_diagram.png)
+:::
+
+::: {.callout-note collapse="true"}
+## `subword` block diagram (click to expand)
+![Figure 8: Block diagram of the `subword` SystemVerilog module.](images/lab7_subword_block_diagram.png)
+:::
+
+Figure 9 shows `shiftrows`. `its` converts the 128-bit input to the 4x4 state array with `input_to_state` from the lab 7 workshop, the shift logic rotates row $r$ left by $r$ bytes, and `sts` converts the result back with `state_to_output`.
+
+::: {.callout-note collapse="true"}
+## `shiftrows` block diagram (click to expand)
+![Figure 9: Block diagram of the `shiftrows` SystemVerilog module.](images/lab7_shiftrows_block_diagram.png)
+:::
+
+Figures 10 and 11 show the provided `mixcolumns` and `mixcolumn` modules.
+
+::: {.callout-note collapse="true"}
+## `mixcolumns` block diagram (click to expand)
+![Figure 10: Block diagram of the `mixcolumns` SystemVerilog module.](images/lab7_mixcolumns_block_diagram.png)
+:::
+
+::: {.callout-note collapse="true"}
+## `mixcolumn` block diagram (click to expand)
+![Figure 11: Block diagram of the `mixcolumn` SystemVerilog module.](images/lab7_mixcolumn_block_diagram.png)
+:::
 
 ### Schematic
 
