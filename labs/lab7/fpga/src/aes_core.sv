@@ -26,6 +26,30 @@ module aes_core(input  logic         clk,
                 output logic         done,
                 output logic [127:0] cyphertext);
 
-    // TODO: Your code goes here
+    logic load_s, first, last;
+
+    synchronizer load_sync(
+        .clk(clk),
+        .rst(1'b0),
+        .data_in(load),
+        .data_out(load_s)
+    );
+
+    aes_controller ctrl(
+        .clk(clk),
+        .load(load_s),
+        .first(first),
+        .last(last),
+        .done(done)
+    );
+
+    aes_datapath dp (
+        .clk(clk),
+        .first(first),
+        .last(last),
+        .key(key),
+        .plaintext(plaintext),
+        .cyphertext(cyphertext)
+    );
 
 endmodule
