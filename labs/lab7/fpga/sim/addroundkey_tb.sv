@@ -27,7 +27,7 @@ module addroundkey_tb();
         #10;
         assert (y === expected) else begin
             errors++;
-            $error("a=%h, roundkey=%h\n  expected y=%h\n  got      y=%h",
+            $error("a=%h, roundkey=%h: expected y=%h, got y=%h",
                    a, roundkey, expected, y);
         end
     endtask
