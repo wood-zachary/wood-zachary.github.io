@@ -1,8 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 // aes_core
-//   top level AES encryption module
-//   when load is asserted, takes the current key and plaintext
-//   generates cyphertext and asserts done when complete 11 cycles later
+//   AES-128 encryption core
+//   Takes the key and plaintext while load is asserted, then generates the
+//   cyphertext and asserts done on the 13th clock edge after load is
+//   deasserted: 2 to synchronize load and 11 for the initial AddRoundKey and
+//   ten rounds
 //
 //   See FIPS-197 with Nk = 4, Nb = 4, Nr = 10
 //
