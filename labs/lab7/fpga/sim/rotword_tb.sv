@@ -16,9 +16,10 @@ module rotword_tb();
         .y(y)
     );
 
-    task automatic check(input logic [31:0] in, input logic [31:0] exp);
-        a = in;
-        expected = exp;
+    task automatic check(input logic [31:0] a_val,
+                         input logic [31:0] expected_val);
+        a = a_val;
+        expected = expected_val;
         #10;
         assert (y === expected) else begin
             errors++;
