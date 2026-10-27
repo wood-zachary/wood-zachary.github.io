@@ -16,7 +16,6 @@ module aes_spi_tb();
 
     // device under test
     aes dut(
-        .clk(clk),
         .sck(sck),
         .sdi(sdi),
         .sdo(sdo),
