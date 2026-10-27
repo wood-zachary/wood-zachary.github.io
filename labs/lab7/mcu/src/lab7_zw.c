@@ -63,9 +63,12 @@ int main(void) {
   // the phase for the SPI clock is 1 and the polarity is 0
   initSPI(1, 0, 0);
 
+  // Also route SPI1_SCK to PA5 (AF5), since the PB3 to P21 connection is open
+  GPIOA->AFR[0] |= _VAL2FLD(GPIO_AFRL_AFSEL5, 5);
+  pinMode(PA5, GPIO_ALT);
 
   // Load and done pins
-  pinMode(PA5, GPIO_OUTPUT);  // LOAD
+  pinMode(PA11, GPIO_OUTPUT);  // LOAD
   pinMode(PA6, GPIO_INPUT);   // DONE
   
   // debugging LEDs
@@ -75,8 +78,8 @@ int main(void) {
   digitalWrite(PA10, 0);
 
   // Artificial chip select signal to allow 8-bit CE-based SPI decoding on the logic analyzers.
-  pinMode(PA11, GPIO_OUTPUT);
-  digitalWrite(PA11, 1);
+  pinMode(PA8, GPIO_OUTPUT);
+  digitalWrite(PA8, 1);
 
 
   // hardware accelerated encryption
@@ -110,31 +113,31 @@ void encrypt(char * key, char * plaintext, char * cyphertext) {
   int i;
 
   // Write LOAD high
-  digitalWrite(PA5, 1);
+  digitalWrite(PA11, 1);
 
   // Send plaintext
   for(i = 0; i < 16; i++) {
-    digitalWrite(PA11, 1); // Arificial CE high
+    digitalWrite(PA8, 1); // Arificial CE high
     spiSendReceive(plaintext[i]);
-    digitalWrite(PA11, 0); // Arificial CE low
+    digitalWrite(PA8, 0); // Arificial CE low
   }
 
   // Send the key
   for(i = 0; i < 16; i++) {
-    digitalWrite(PA11, 1); // Arificial CE high
+    digitalWrite(PA8, 1); // Arificial CE high
     spiSendReceive(key[i]);
-    digitalWrite(PA11, 0); // Arificial CE low
+    digitalWrite(PA8, 0); // Arificial CE low
   }
 
   while(SPI1->SR & SPI_SR_BSY); // Confirm all SPI transactions are completed
-  digitalWrite(PA5, 0); // Write LOAD low
+  digitalWrite(PA11, 0); // Write LOAD low
 
   // Wait for DONE signal to be asserted by FPGA signifying that the data is ready to be read out.
   while(!digitalRead(PA6));
 
   for(i = 0; i < 16; i++) {
-    digitalWrite(PA11, 1); // Arificial CE high
+    digitalWrite(PA8, 1); // Arificial CE high
     cyphertext[i] = spiSendReceive(0);  
-    digitalWrite(PA11, 0); // Arificial CE low
+    digitalWrite(PA8, 0); // Arificial CE low
   }
 }
