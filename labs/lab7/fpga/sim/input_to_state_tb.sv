@@ -84,6 +84,6 @@ module input_to_state_tb();
 
         if (errors == 0) $display("PASSED: all %0d tests", tests);
         else             $display("FAILED: %0d of %0d tests", errors, tests);
-        $finish;
+        $stop;
     end
 endmodule
