@@ -15,27 +15,27 @@ description: >-
 
 ## Introduction
 
-Briefly explain what was done.
-
-<!-- TODO -->
+The goal of this lab was to construct and verify a hardware accelerator to perform 128-bit AES encryption. This required reading and implementing a complex specification [(NIST FIPS 197)](https://doi.org/10.6028/NIST.FIPS.197-upd1), architecting a nontrivial system such that it fits on the Lattice iCE40UP5K FPGA, and implementing an interface to communicate between the FPGA and the STM32L432KC MCU.
 
 ## Design and Testing Methodology
 
-Explain how you approached the design of this assignment from both a software and a hardware standpoint (as appropriate). Include how you tested your design. These tests should convince the reader that the requirements of the assignment have been met.
+Designing an AES-128 encryption accelerator for the iCE40UP5K FPGA posed two problems. First, the FPGA has only 5,280 4-input LUTs, which is too few to compute all ten rounds in a single cycle. Therefore, I approached the accelerator similarly to a multicycle processor, with a datapath and a controller hat perform the initial AddRoundKey and ten rounds over 11 cycles. Since the MCU's `load` is asynchronous to the FPGA's `clk`, it passes through a two-stage synchronizer, giving 13 total cycles of latench.
 
-<!-- TODO -->
+Second, the 20 sboxes (16 in SubBytes and 4 in SubWord) are too large to implment in LUTs, so each one uses a block RAM. However, block RAM reads are syncrhonous, so each sbox output is available one cycle after its input. Therefore, I used the SubBytes sbox outputs as the state register so that the read latency forms the boundary between each round. In `keyexpansion`, SubWord acts on the current round key, so its output arrives in the following cycle together with the previous key `prev_key`, which is stored in a register.
+
+FIPS 197 Appendices A.1 and B list the round keys and the state after each step of every round. I wrote a self-checking testbench for each module against therse vectors before testing the full system with the provided testbenches. Finally, I verified the design on hardware by comparing the received cyphertext against the expected value in the MCU code and capturing the SPI transaction with a logic analyzer.
+
+<!-- TODO: logic analyzer or oscope -->
 
 ### Finite State Machines
 
-The controller (`aes_controller`) consists of two communicating Moore FSMs, both reset by `load`. The round FSM is an instantiation of my `counter` from lab 3. It advances once per cycle while `done` is low, and its state, is decoded into `first` (round 0, the initial AddRoundKey) and `last` (round 10, which skips MixColumns). The done FSM is a single register that moves from WAIT to DONE when `last` is asserted. `done` therefore comes directly from a flip-flop and rises on the same edge that the cyphertext register captures the result, and it holds the counter at 11 until the next `load`.
+The controller (`aes_controller`) consists of two communicating Moore FSMs, both reset by the synchronized `load`. The round FSM is an instantiation of my `counter` module from lab 3, which advances once per cycle while `done` is low. Its state is decoded into `first` (round 0, the initial AddRoundKey) and `last` (round 10, which skips MixColumns). The done FSM is a single register that moves from WAIT to DONE when `last` is asserted. `done` therefore comes directly from a flip-flop and rises on the same edge that the cyphertext register captures the result, and it holds the counter at 11 until the next `load`.
 
 ![Figure 1: State transition diagrams for the two FSMs in `aes_controller`.](images/lab7_aes_controller_fsms.png)
 
 ## Technical Documentation
 
-The source code for this lab is available in [the associated Git repository](#).
-
-<!-- TODO -->
+The source code for this lab is available in [the associated Git repository](https://github.com/wood-zachary/hmc-e155-portfolio/tree/main/labs/lab7).
 
 ### Block Diagram
 
@@ -111,21 +111,11 @@ Figure 12 shows the synthesis results. The design uses 1,377 of 5,280 logic cell
 ![Figure 12: Synthesis results for `aes`.](images/lab7_synthesis_results.png)
 :::
 
-### Schematic
-
-Insert schematic image and note component values
-
-<!-- TODO -->
-
-#### Calculations
-
-<!-- TODO -->
-
 ## Results and Discussion
 
-Did you accomplish all of the prescribed tasks? If not, what are the shortcomings? How might you address them given more time? As appropriate, how did the design perform (e.g., How fast/accurate/reliable was it?).
+The design meets all of the proficiency and excellence requirements in both simulation and hardware. It fits on the FPGA and completes a full SPI transaction, returning the correct cyphertext computed by the accelerator, as shown in Figure 26.
 
-<!-- TODO -->
+Two changes from the provided setup were necessary. First, core.clk achieves a maximum frequency of only 42.02 MHz, so I set CLKHF_DIV to 0b01 to divide the HSOSC to 24 MHz. Second, my board's connection between MCU PB3 (SPI1_SCK) and FPGA P21 is open, so SCK wasn't reaching the FPGA. So I routed SPI1_SCK to PA5 (alternate function 5), moved load from PA5 to PA11, and moved the artificial chip enable from PA11 to PA8. I reassigned the FPGA's sck and load pins to P26 and P20 to match.
 
 ### Testbench Simulation
 
@@ -187,14 +177,755 @@ Each new module has a self-checking testbench based on the FIPS-197 Appendix A.1
 
 ![Figure 25: QuestaSim waveform for the provided `aes_spi_tb`, showing the key and plaintext shifted in, `done`, and the cyphertext shifted out.](images/lab7_aes_spi_tb_waveform.png)
 
+### Logic Analyzer Trace
+
+<!-- TODO: save as lab7_spi_logic_analyzer_trace.png -->
+
+![Figure 26: Logic analyzer capture of the SPI transaction between the MCU and FPGA, showing the plaintext and key shifted in while `load` is high, `done` rising, and the cyphertext shifted out.](images/lab7_spi_logic_analyzer_trace.png)
+
 ## Conclusion
 
-Briefly summarize what was done and how it performed. Also note how many hours you spent working on the lab.
+The design receives `key` and `plaintext` from the MCU when it asserts `load` and then generates `cyphertext` and asserts `done` on the 13th clock edge after `load` is deasserted (2 cycles to synchronize `load` and 11 cycles for encryption algorithm).
 
-<!-- TODO -->
+::: {.callout-note collapse="true"}
+## Hours spent (click to expand)
+I spent about 19 hours on this lab. For instructor reference, I spent 2 hours working through the provided materials, 1 hour writing module and testbench templates/stubs, 8 hours drawing block diagrams, 2 hours capturing testbench waveforms, 1 hour capturing the SPI communication with the logic analyzer or oscilloscope, 2 hours synthesizing my design and debugging hardware, and then 3 hours completing the AI prototype and writing this lab report.
+:::
+
+<!-- TODO: logic analyzer or oscope -->
 
 ## AI Prototype Summary
 
-Include generated code, chat transcripts, and a reflection on how well it worked
+::: {.callout-tip collapse="true"}
+## Prototype A: PDF of FIPS-197 AES Specification Uploaded (Claude, Opus 5.5, medium reasoning effort)
+Write SystemVerilog HDL to implement the KeyExpansion logic described in the FIPS-197 uploaded document. The module should be purely combinational, using the previous key and current round number to calculate the next key. Assume other required modules (SubWord and RotWord) are already implemented.
+:::
 
-<!-- TODO -->
+
+::: {.callout-note collapse="true"}
+## Prototype A generated code
+```systemverilog
+package aes128_key_pkg;
+
+    localparam int BYTE_W  = 8;
+    localparam int WORD_W  = 4 * BYTE_W;
+    localparam int NK      = 4;   // FIPS 197 Table 3, AES-128
+    localparam int NR      = 10;  // FIPS 197 Table 3, AES-128
+    localparam int KEY_W   = NK * WORD_W;
+    localparam int ROUND_W = $clog2(NR + 1);
+
+    // Low byte of m(x) = x^8 + x^4 + x^3 + x + 1 (FIPS 197 Eq. 4.3, 4.5)
+    localparam logic [BYTE_W-1:0] M_X_LOW_BYTE = 8'h1b;
+
+    // Polynomial "1" = x^0, the leading byte of Rcon[1] (FIPS 197 Table 5)
+    localparam logic [BYTE_W-1:0] GF_ONE = 8'h01;
+
+    // Multiplication by x modulo m(x); result is always a valid GF(2^8) element (Eq. 4.5)
+    function automatic logic [BYTE_W-1:0] xtimes(input logic [BYTE_W-1:0] b);
+        return {b[BYTE_W-2:0], 1'b0} ^ (b[BYTE_W-1] ? M_X_LOW_BYTE : '0);
+    endfunction
+
+endpackage
+```
+
+```systemverilog
+module aes128_key_expand_round
+    import aes128_key_pkg::*;
+(
+    input  logic [KEY_W-1:0]   prev_key,
+    input  logic [ROUND_W-1:0] round,
+
+    output logic [KEY_W-1:0]   next_key
+);
+
+    logic [WORD_W-1:0] prev_w [NK];
+    logic [WORD_W-1:0] next_w [NK];
+    logic [WORD_W-1:0] rot_w;
+    logic [WORD_W-1:0] sub_rot_w;
+    logic [BYTE_W-1:0] rcon_byte;
+    logic [WORD_W-1:0] temp;
+
+    // ---- Word unpacking: w[0] is the most significant word (FIPS 197 Sec. 3.3, 3.5)
+    always_comb begin
+        for (int i = 0; i < NK; i++) begin
+            prev_w[i] = prev_key[KEY_W - 1 - i * WORD_W -: WORD_W];
+        end
+    end
+
+    // ---- Round constant: leading byte of Rcon[j] is x^(j-1) (FIPS 197 Sec. 5.2, Table 5).
+    // Codes outside 1..NR are undefined by the standard and select no constant.
+    always_comb begin
+        logic [BYTE_W-1:0] power;
+        power     = GF_ONE;
+        rcon_byte = '0;
+        for (int j = 1; j <= NR; j++) begin
+            if (round == ROUND_W'(j)) begin
+                rcon_byte = power;
+            end
+            power = xtimes(power);
+        end
+    end
+
+    // ---- temp = SubWord(RotWord(w[i-1])) ^ Rcon[i/Nk] for i mod Nk = 0 (FIPS 197 Alg. 2)
+    rot_word rot_last_word (
+        .word_in  (prev_w[NK-1]),
+        .word_out (rot_w)
+    );
+
+    sub_word sub_rotated_word (
+        .word_in  (rot_w),
+        .word_out (sub_rot_w)
+    );
+
+    assign temp = sub_rot_w ^ {rcon_byte, {(WORD_W - BYTE_W){1'b0}}};
+
+    // ---- Chaining: w[i] = w[i-Nk] ^ temp, then w[i] = w[i-Nk] ^ w[i-1] (FIPS 197 Alg. 2)
+    always_comb begin
+        next_w[0] = prev_w[0] ^ temp;
+        for (int i = 1; i < NK; i++) begin
+            next_w[i] = prev_w[i] ^ next_w[i-1];
+        end
+        for (int i = 0; i < NK; i++) begin
+            next_key[KEY_W - 1 - i * WORD_W -: WORD_W] = next_w[i];
+        end
+    end
+
+endmodule
+```
+
+```systemverilog
+`timescale 1ns / 1ps
+
+module aes128_key_expand_round_tb;
+    import aes128_key_pkg::*;
+
+    localparam int CLK_PERIOD_NS  = 10;
+    localparam int N_RANDOM_KEYS  = 256;
+    localparam int ROUND_MAX_CODE = (1 << ROUND_W) - 1;
+    localparam int SBOX_SIZE      = 1 << BYTE_W;
+    localparam int GF_INV_EXP     = SBOX_SIZE - 2;  // b^-1 = b^254 (FIPS 197 Eq. 4.11)
+
+    localparam logic [BYTE_W-1:0] GF_X          = 8'h02;  // polynomial x (Eq. 4.5)
+    localparam logic [BYTE_W-1:0] SBOX_AFFINE_C = 8'h63;  // constant c (Sec. 5.1.1)
+
+    // ---- Published values used only to validate the reference model (FIPS 197)
+    localparam logic [BYTE_W-1:0] SBOX_IN_00_OUT = 8'h63;  // Table 4, xy = 00
+    localparam logic [BYTE_W-1:0] SBOX_IN_53     = 8'h53;  // Sec. 5.1.1 example
+    localparam logic [BYTE_W-1:0] SBOX_IN_53_OUT = 8'hed;
+    localparam logic [KEY_W-1:0]  A1_KEY         = 128'h2b7e1516_28aed2a6_abf71588_09cf4f3c;
+    localparam logic [KEY_W-1:0]  A1_ROUND1_KEY  = 128'ha0fafe17_88542cb1_23a33939_2a6c7605;
+    localparam logic [KEY_W-1:0]  A1_ROUND10_KEY = 128'hd014f9a8_c9ee2589_e13f0cc8_b6630ca6;
+
+    logic               clk = 1'b0;
+    logic [KEY_W-1:0]   prev_key;
+    logic [ROUND_W-1:0] round;
+    logic [KEY_W-1:0]   next_key;
+
+    logic [BYTE_W-1:0]  ref_sbox_table [SBOX_SIZE];
+    int                 errors = 0;
+    int                 checks = 0;
+
+    aes128_key_expand_round dut (
+        .prev_key (prev_key),
+        .round    (round),
+        .next_key (next_key)
+    );
+
+    always #(CLK_PERIOD_NS / 2) clk = ~clk;
+
+    // ---- Reference model, independent of the DUT's sub_word implementation
+    function automatic logic [BYTE_W-1:0] ref_gf_mul(input logic [BYTE_W-1:0] a,
+                                                     input logic [BYTE_W-1:0] b);
+        logic [BYTE_W-1:0] product = '0;
+        logic [BYTE_W-1:0] shifted = a;
+        for (int i = 0; i < BYTE_W; i++) begin
+            if (b[i]) begin
+                product ^= shifted;
+            end
+            shifted = {shifted[BYTE_W-2:0], 1'b0} ^ (shifted[BYTE_W-1] ? M_X_LOW_BYTE : '0);
+        end
+        return product;
+    endfunction
+
+    function automatic logic [BYTE_W-1:0] ref_sbox(input logic [BYTE_W-1:0] b);
+        logic [BYTE_W-1:0] inv;
+        logic [BYTE_W-1:0] result;
+        inv = GF_ONE;
+        for (int k = 0; k < GF_INV_EXP; k++) begin
+            inv = ref_gf_mul(inv, b);
+        end
+        if (b == '0) begin
+            inv = '0;  // FIPS 197 Eq. 5.2
+        end
+        for (int i = 0; i < BYTE_W; i++) begin
+            result[i] = inv[i]
+                      ^ inv[(i + 4) % BYTE_W]
+                      ^ inv[(i + 5) % BYTE_W]
+                      ^ inv[(i + 6) % BYTE_W]
+                      ^ inv[(i + 7) % BYTE_W]
+                      ^ SBOX_AFFINE_C[i];
+        end
+        return result;
+    endfunction
+
+    function automatic logic [BYTE_W-1:0] ref_rcon(input int rnd);
+        logic [BYTE_W-1:0] rc;
+        if (rnd < 1 || rnd > NR) begin
+            return '0;
+        end
+        rc = GF_ONE;
+        repeat (rnd - 1) begin
+            rc = ref_gf_mul(rc, GF_X);
+        end
+        return rc;
+    endfunction
+
+    function automatic logic [KEY_W-1:0] ref_next_key(input logic [KEY_W-1:0] prev,
+                                                      input int               rnd);
+        logic [WORD_W-1:0] w [NK];
+        logic [WORD_W-1:0] t;
+        logic [KEY_W-1:0]  result;
+        for (int i = 0; i < NK; i++) begin
+            w[i] = prev[KEY_W - 1 - i * WORD_W -: WORD_W];
+        end
+        t = {w[NK-1][WORD_W-BYTE_W-1:0], w[NK-1][WORD_W-1 -: BYTE_W]};  // Eq. 5.10
+        for (int k = 0; k < WORD_W / BYTE_W; k++) begin
+            t[k * BYTE_W +: BYTE_W] = ref_sbox_table[t[k * BYTE_W +: BYTE_W]];  // Eq. 5.11
+        end
+        t ^= {ref_rcon(rnd), {(WORD_W - BYTE_W){1'b0}}};
+        w[0] ^= t;
+        for (int i = 1; i < NK; i++) begin
+            w[i] ^= w[i-1];
+        end
+        for (int i = 0; i < NK; i++) begin
+            result[KEY_W - 1 - i * WORD_W -: WORD_W] = w[i];
+        end
+        return result;
+    endfunction
+
+    // ---- Stimulus and checking tasks
+    task automatic check_model(input string label, input logic pass);
+        checks++;
+        assert (pass)
+            $display("PASSED! model %s t=%0t", label, $time);
+        else begin
+            errors++;
+            $error("FAILED! model %s t=%0t", label, $time);
+        end
+    endtask
+
+    task automatic validate_reference_model();
+        logic [KEY_W-1:0] key;
+        check_model("SBOX(00)", ref_sbox_table[8'h00] === SBOX_IN_00_OUT);
+        check_model("SBOX(53)", ref_sbox_table[SBOX_IN_53] === SBOX_IN_53_OUT);
+        check_model("A.1 round 1", ref_next_key(A1_KEY, 1) === A1_ROUND1_KEY);
+        key = A1_KEY;
+        for (int r = 1; r <= NR; r++) begin
+            key = ref_next_key(key, r);
+        end
+        check_model("A.1 round 10", key === A1_ROUND10_KEY);
+    endtask
+
+    task automatic apply_and_check(input logic [KEY_W-1:0] key,
+                                   input int               rnd,
+                                   input string            label);
+        logic [KEY_W-1:0] expected;
+        @(negedge clk);
+        prev_key = key;
+        round    = ROUND_W'(rnd);
+        expected = ref_next_key(key, rnd);
+        @(negedge clk);
+        checks++;
+        assert (next_key === expected)
+            $display("PASSED! %s round=%0d prev_key=%h next_key=%h t=%0t",
+                     label, round, prev_key, next_key, $time);
+        else begin
+            errors++;
+            $error("FAILED! %s round=%0d prev_key=%h next_key=%h expected=%h t=%0t",
+                   label, round, prev_key, next_key, expected, $time);
+        end
+    endtask
+
+    task automatic run_fips_chain();
+        logic [KEY_W-1:0] key;
+        key = A1_KEY;
+        for (int r = 1; r <= NR; r++) begin
+            apply_and_check(key, r, "A.1 chain");
+            key = next_key;
+        end
+        checks++;
+        assert (key === A1_ROUND10_KEY)
+            $display("PASSED! A.1 chain final key=%h t=%0t", key, $time);
+        else begin
+            errors++;
+            $error("FAILED! A.1 chain final key=%h expected=%h t=%0t",
+                   key, A1_ROUND10_KEY, $time);
+        end
+    endtask
+
+    task automatic sweep_all_round_codes(input logic [KEY_W-1:0] key, input string label);
+        for (int r = 0; r <= ROUND_MAX_CODE; r++) begin
+            apply_and_check(key, r, label);
+        end
+    endtask
+
+    // ---- Test sequence
+    initial begin
+        prev_key = '0;
+        round    = '0;
+        for (int b = 0; b < SBOX_SIZE; b++) begin
+            ref_sbox_table[b] = ref_sbox(BYTE_W'(b));
+        end
+
+        validate_reference_model();
+        run_fips_chain();
+        sweep_all_round_codes('0, "all-zero key");
+        sweep_all_round_codes('1, "all-one key");
+        for (int n = 0; n < N_RANDOM_KEYS; n++) begin
+            sweep_all_round_codes({$urandom(), $urandom(), $urandom(), $urandom()},
+                                  "random key");
+        end
+
+        $display("SUMMARY: %0d checks, %0d errors", checks, errors);
+        $stop;
+    end
+
+endmodule
+```
+:::
+
+::: {.callout-tip collapse="true"}
+## Prototype B: No PDF of FIPS-197 AES Specification Included (Claude, Opus 5.5, medium reasoning effort)
+Write SystemVerilog HDL to implement the following logic:
+
+```
+i = 0
+while i < Nk do
+    w[i] <- key[4*i..4*i+3]
+    i <- i+1
+end while
+while i <= 4 * Nr + 3 do
+    temp <- w[i-1]
+    if i mod Nk = 0 then
+        temp <- module1(module2(temp)) (+) Rcon[i/Nk]
+    else if Nk > 6 and i mod Nk = 4 then
+        temp <- module1(temp)
+    end if
+    w[i] <- w[i-Nk] (+) temp
+    i <- i + 1
+end while
+return w
+```
+
+Assume module1 and module2 are existing modules that can be instantiated. (+) refers to XOR. Unwrap the loop in the provided pseudo code so it uses the previous iterations output to generate the new iteration.
+
+Do not use any existing knowledge of the AES specifications in your answer.
+:::
+
+::: {.callout-note collapse="true"}
+## Prototype B generated code
+```systemverilog
+package key_expand_pkg;
+    localparam int ELEMS_PER_WORD  = 4;  // key[4*i..4*i+3] forms w[i]
+    localparam int WORDS_PER_ROUND = 4;  // loop bound 4 * Nr + 3
+    localparam int MID_WORD_POS    = 4;  // condition i mod Nk = 4
+    localparam int MID_WORD_MIN_NK = 7;  // condition Nk > 6
+
+    typedef enum logic [1:0] {S_IDLE, S_EXPAND, S_DONE} statetype;
+endpackage
+```
+
+```systemverilog
+module key_expand
+    import key_expand_pkg::*;
+#(
+    parameter  int NK         = 8,
+    parameter  int NR         = 6,
+    parameter  int ELEM_W     = 8,
+    localparam int WORD_W     = ELEMS_PER_WORD * ELEM_W,
+    localparam int NUM_WORDS  = WORDS_PER_ROUND * (NR + 1),
+    localparam int NUM_BLOCKS = (NUM_WORDS + NK - 1) / NK,
+    localparam int RCON_LAST  = NUM_BLOCKS - 1
+) (
+    input  logic              clk,
+    input  logic              rst,
+    input  logic              start,
+    input  logic [ELEM_W-1:0] key  [ELEMS_PER_WORD * NK],
+    input  logic [WORD_W-1:0] rcon [1:RCON_LAST],
+
+    output logic [WORD_W-1:0] w    [NUM_WORDS],
+    output logic              done
+);
+
+    // ---------------------------------------------------------------- parameter checks
+    if (NK < 1) begin : g_check_nk
+        $error("NK must be at least 1");
+    end
+    if (NUM_BLOCKS < 2) begin : g_check_blocks
+        $error("NUM_WORDS must exceed NK so at least one block is expanded");
+    end
+
+    // ---------------------------------------------------------------- declarations
+    localparam int               CNT_W     = $clog2(NUM_BLOCKS);
+    localparam logic [CNT_W-1:0] CNT_FIRST = CNT_W'(1);
+    localparam logic [CNT_W-1:0] CNT_LAST  = CNT_W'(RCON_LAST);
+
+    typedef logic [WORD_W-1:0] word_t;
+
+    statetype         state, nextState;
+    logic             load, en, last;
+    logic [CNT_W-1:0] blk_cnt;
+
+    word_t key_words [NK];
+    word_t blk_q     [NK];
+    word_t blk_next  [NK];
+    word_t temp      [NK];
+    word_t w_q       [NUM_BLOCKS * NK];
+    word_t rot_m2, rot_m1;
+
+    // ---------------------------------------------------------------- key word assembly
+    for (genvar k = 0; k < NK; k++) begin : g_key_word
+        for (genvar e = 0; e < ELEMS_PER_WORD; e++) begin : g_key_elem
+            assign key_words[k][WORD_W-1-e*ELEM_W -: ELEM_W] = key[ELEMS_PER_WORD*k + e];
+        end
+    end
+
+    // ---------------------------------------------------------------- next-block datapath
+    module2 u_first_word_module2 (
+        .din  (blk_q[NK-1]),
+        .dout (rot_m2)
+    );
+
+    module1 u_first_word_module1 (
+        .din  (rot_m2),
+        .dout (rot_m1)
+    );
+
+    for (genvar k = 0; k < NK; k++) begin : g_next_word
+        if (k == 0) begin : g_first
+            // blk_cnt stays in [1, RCON_LAST]: reset and load set 1, increment stops at last
+            assign temp[k] = rot_m1 ^ rcon[blk_cnt];
+        end else if (NK >= MID_WORD_MIN_NK && k == MID_WORD_POS) begin : g_mid
+            module1 u_mid_word_module1 (
+                .din  (blk_next[k-1]),
+                .dout (temp[k])
+            );
+        end else begin : g_pass
+            assign temp[k] = blk_next[k-1];
+        end
+        assign blk_next[k] = blk_q[k] ^ temp[k];
+    end
+
+    // ---------------------------------------------------------------- control FSM
+    always_ff @(posedge clk) begin
+        if (rst) state <= S_IDLE;
+        else     state <= nextState;
+    end
+
+    always_comb begin
+        case (state)
+            S_IDLE:   nextState = start ? S_EXPAND : S_IDLE;
+            S_EXPAND: nextState = last  ? S_DONE   : S_EXPAND;
+            S_DONE:   nextState = start ? S_EXPAND : S_DONE;
+            default:  nextState = S_IDLE;
+        endcase
+    end
+
+    assign load = start && (state == S_IDLE || state == S_DONE);
+    assign en   = (state == S_EXPAND);
+    assign last = (blk_cnt == CNT_LAST);
+    assign done = (state == S_DONE);
+
+    // ---------------------------------------------------------------- block counter
+    always_ff @(posedge clk) begin
+        if (rst || load)     blk_cnt <= CNT_FIRST;
+        else if (en && !last) blk_cnt <= blk_cnt + 1'b1;
+    end
+
+    // ---------------------------------------------------------------- previous-block register
+    always_ff @(posedge clk) begin
+        if (load)    blk_q <= key_words;
+        else if (en) blk_q <= blk_next;
+    end
+
+    // ---------------------------------------------------------------- word storage
+    for (genvar b = 0; b < NUM_BLOCKS; b++) begin : g_store_block
+        for (genvar k = 0; k < NK; k++) begin : g_store_word
+            if (b == 0) begin : g_key
+                always_ff @(posedge clk) begin
+                    if (load) w_q[k] <= key_words[k];
+                end
+            end else begin : g_expanded
+                always_ff @(posedge clk) begin
+                    if (en && blk_cnt == CNT_W'(b)) w_q[b*NK + k] <= blk_next[k];
+                end
+            end
+        end
+    end
+
+    for (genvar i = 0; i < NUM_WORDS; i++) begin : g_out
+        assign w[i] = w_q[i];
+    end
+
+endmodule
+```
+
+```systemverilog
+package keyexp_stub_pkg;
+    localparam int          STUB_WORD_W = 32;
+    localparam logic [31:0] F1_MULT     = 32'h9E37_79B1;
+    localparam logic [31:0] F1_ADD      = 32'h0123_4567;
+    localparam int          F2_ROT      = 13;
+    localparam logic [31:0] F2_MASK     = 32'h5A5A_0F0F;
+
+    // Product and sum wrap modulo 2^STUB_WORD_W
+    function automatic logic [STUB_WORD_W-1:0] f1(input logic [STUB_WORD_W-1:0] x);
+        return x * F1_MULT + F1_ADD;
+    endfunction
+
+    function automatic logic [STUB_WORD_W-1:0] f2(input logic [STUB_WORD_W-1:0] x);
+        return ((x << F2_ROT) | (x >> (STUB_WORD_W - F2_ROT))) ^ F2_MASK;
+    endfunction
+endpackage
+
+module module1
+    import keyexp_stub_pkg::*;
+(
+    input  logic [STUB_WORD_W-1:0] din,
+
+    output logic [STUB_WORD_W-1:0] dout
+);
+    assign dout = f1(din);
+endmodule
+
+module module2
+    import keyexp_stub_pkg::*;
+(
+    input  logic [STUB_WORD_W-1:0] din,
+
+    output logic [STUB_WORD_W-1:0] dout
+);
+    assign dout = f2(din);
+endmodule
+```
+
+```systemverilog
+`timescale 1ns / 1ps
+
+module key_expand_tb;
+    import key_expand_pkg::*;
+    import keyexp_stub_pkg::*;
+
+    parameter int NK = 8;
+    parameter int NR = 6;
+
+    // ---------------------------------------------------------------- constants
+    localparam int SPEC_ELEMS_PER_WORD = 4;
+    localparam int SPEC_ROUND_WORDS    = 4;
+    localparam int SPEC_MID_POS        = 4;
+    localparam int SPEC_NK_ABOVE       = 6;
+
+    localparam int ELEM_W          = 8;
+    localparam int WORD_W          = SPEC_ELEMS_PER_WORD * ELEM_W;
+    localparam int LAST_INDEX      = SPEC_ROUND_WORDS * NR + SPEC_ROUND_WORDS - 1;
+    localparam int NUM_WORDS       = LAST_INDEX + 1;
+    localparam int NUM_BLOCKS      = (NUM_WORDS + NK - 1) / NK;
+    localparam int RCON_LAST       = NUM_BLOCKS - 1;
+    localparam int LATENCY_CYCLES  = NUM_BLOCKS;
+    localparam int TIMEOUT_CYCLES  = 4 * LATENCY_CYCLES;
+    localparam int CLK_PERIOD_NS   = 10;
+    localparam int RESET_CYCLES    = 3;
+    localparam int HOLD_CYCLES     = 4;
+    localparam int NUM_RANDOM_RUNS = 20;
+
+    localparam logic [1:0] ILLEGAL_STATE = 2'b11;
+
+    typedef logic [ELEM_W-1:0] elem_t;
+    typedef logic [WORD_W-1:0] word_t;
+    typedef elem_t key_arr_t  [SPEC_ELEMS_PER_WORD * NK];
+    typedef word_t rcon_arr_t [1:RCON_LAST];
+    typedef word_t w_arr_t    [NUM_WORDS];
+
+    // ---------------------------------------------------------------- signals and DUT
+    logic      clk;
+    logic      rst;
+    logic      start;
+    key_arr_t  key;
+    rcon_arr_t rcon;
+    w_arr_t    w;
+    logic      done;
+    int        errors;
+
+    key_expand #(
+        .NK     (NK),
+        .NR     (NR),
+        .ELEM_W (ELEM_W)
+    ) dut (
+        .clk   (clk),
+        .rst   (rst),
+        .start (start),
+        .key   (key),
+        .rcon  (rcon),
+        .w     (w),
+        .done  (done)
+    );
+
+    initial clk = 1'b0;
+    always #(CLK_PERIOD_NS / 2) clk = ~clk;
+
+    // ---------------------------------------------------------------- reference model
+    function automatic w_arr_t golden(input key_arr_t k_in, input rcon_arr_t rc);
+        w_arr_t ref_w;
+        word_t  temp;
+        int     i;
+
+        i = 0;
+        while (i < NK) begin
+            for (int e = 0; e < SPEC_ELEMS_PER_WORD; e++) begin
+                ref_w[i][WORD_W-1-e*ELEM_W -: ELEM_W] = k_in[SPEC_ELEMS_PER_WORD*i + e];
+            end
+            i++;
+        end
+        while (i <= LAST_INDEX) begin
+            temp = ref_w[i-1];
+            if (i % NK == 0) begin
+                temp = f1(f2(temp)) ^ rc[i / NK];
+            end else if (NK > SPEC_NK_ABOVE && i % NK == SPEC_MID_POS) begin
+                temp = f1(temp);
+            end
+            ref_w[i] = ref_w[i-NK] ^ temp;
+            i++;
+        end
+        return ref_w;
+    endfunction
+
+    // ---------------------------------------------------------------- tasks
+    task automatic check(input bit cond, input string msg);
+        assert (cond) $display("PASSED! %s at %0t", msg, $time);
+        else begin
+            errors++;
+            $error("FAILED! %s at %0t", msg, $time);
+        end
+    endtask
+
+    task automatic check_state(input statetype expected, input string tag);
+        check(dut.state == expected && done == (expected == S_DONE),
+              $sformatf("%s: state=%s done=%b expected state=%s",
+                        tag, dut.state.name(), done, expected.name()));
+    endtask
+
+    task automatic randomize_inputs();
+        foreach (key[j])  key[j]  = elem_t'($urandom);
+        foreach (rcon[j]) rcon[j] = word_t'($urandom);
+    endtask
+
+    task automatic apply_reset();
+        start = 1'b0;
+        rst   = 1'b1;
+        repeat (RESET_CYCLES) @(negedge clk);
+        rst = 1'b0;
+    endtask
+
+    task automatic run_expansion(input string tag, input bit pulse_start_mid);
+        w_arr_t expected;
+        int     cycles;
+        int     bad;
+
+        randomize_inputs();
+        expected = golden(key, rcon);
+
+        start = 1'b1;
+        @(negedge clk);
+        start  = 1'b0;
+        cycles = 1;
+        while (!done && cycles < TIMEOUT_CYCLES) begin
+            check(dut.blk_cnt == cycles,
+                  $sformatf("%s: blk_cnt=%0d expected %0d", tag, dut.blk_cnt, cycles));
+            start = pulse_start_mid && (cycles == 1);
+            @(negedge clk);
+            start = 1'b0;
+            cycles++;
+        end
+
+        check(done && cycles == LATENCY_CYCLES,
+              $sformatf("%s: done=%b after %0d cycles, expected %0d",
+                        tag, done, cycles, LATENCY_CYCLES));
+
+        bad = 0;
+        for (int i = 0; i < NUM_WORDS; i++) begin
+            if (w[i] !== expected[i]) begin
+                bad++;
+                $display("MISMATCH %s: w[%0d]=%h expected %h at %0t",
+                         tag, i, w[i], expected[i], $time);
+            end
+        end
+        check(bad == 0, $sformatf("%s: %0d of %0d words mismatched", tag, bad, NUM_WORDS));
+    endtask
+
+    task automatic reset_mid_expansion();
+        randomize_inputs();
+        start = 1'b1;
+        @(negedge clk);
+        start = 1'b0;
+        check_state(S_EXPAND, "before mid-expansion reset");
+        apply_reset();
+        check_state(S_IDLE, "after mid-expansion reset");
+        check(dut.blk_cnt == 1, $sformatf("mid-expansion reset: blk_cnt=%0d expected 1",
+                                          dut.blk_cnt));
+    endtask
+
+    task automatic illegal_state_recovery();
+        @(negedge clk);
+        force dut.state = statetype'(ILLEGAL_STATE);
+        release dut.state;
+        @(negedge clk);
+        check_state(S_IDLE, "recovery from illegal state encoding");
+    endtask
+
+    // ---------------------------------------------------------------- stimulus
+    initial begin
+        errors = 0;
+        start  = 1'b0;
+        rst    = 1'b1;
+        randomize_inputs();
+
+        apply_reset();
+        check_state(S_IDLE, "after power-on reset");
+
+        repeat (HOLD_CYCLES) @(negedge clk);
+        check_state(S_IDLE, "IDLE holds without start");
+
+        apply_reset();
+        check_state(S_IDLE, "reset while IDLE");
+
+        run_expansion("first run from IDLE", 1'b0);
+
+        repeat (HOLD_CYCLES) @(negedge clk);
+        check_state(S_DONE, "DONE holds without start");
+
+        for (int r = 0; r < NUM_RANDOM_RUNS; r++) begin
+            run_expansion($sformatf("back-to-back run %0d from DONE", r), 1'b0);
+        end
+
+        run_expansion("start pulse during expansion is ignored", 1'b1);
+
+        reset_mid_expansion();
+        run_expansion("run after mid-expansion reset", 1'b0);
+
+        apply_reset();
+        check_state(S_IDLE, "reset while DONE");
+
+        illegal_state_recovery();
+        run_expansion("run after illegal-state recovery", 1'b0);
+
+        $display("SUMMARY: %0d error(s)", errors);
+        $stop;
+    end
+
+endmodule
+```
+:::
+
+Reflection: these prototypes contained a handful of constructs that I have not used before in my own designs, including packages, -: for indexed variable part-selects, and .name() for enum variables. Prototype A seems to work properly but, as requested, is purely combinational and depends on a combinational sub_word with `word_in`/`word_out` ports instead of a sub_word with a cycle of latency. Prototype B also seems fine and handles the pseudocode propely but its configuration doesn't match AES. It defaulted to `NK = 8` and `NR = 6`, while AES-128 is `NK = 4` and `NR = 10`. It also takes `rcon` as an input array instead of generating it and stores every expanded word in registers, which would take many logic cells. 
+
+Withholding the specifications did not visibly hurt the HDL itself, but important constants and design choices from the specifications were lost.
