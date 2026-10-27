@@ -6,6 +6,7 @@ image: images/lab7_aes_datapath_block_diagram.png
 categories:
   - labreport
 draft: false
+lightbox: true
 description: >-
   Designed an AES-128 encryption accelerator for the iCE40 UP5K FPGA
   that receives a key and plaintext from the STM32L432KC over SPI and
@@ -101,6 +102,15 @@ Figures 10 and 11 show the provided `mixcolumns` and `mixcolumn` modules.
 ![Figure 11: Block diagram of the `mixcolumn` SystemVerilog module.](images/lab7_mixcolumn_block_diagram.png)
 :::
 
+### Synthesis Results
+
+Figure 12 shows the synthesis results. The design uses 1,377 of 5,280 logic cells and 20 of 30 block RAMs (one per sbox). Since `core.clk` achieves only 42.02 MHz, `hf_osc` was divided to 24 MHz.
+
+::: {.callout-note collapse="true"}
+## Synthesis results (click to expand)
+![Figure 12: Synthesis results for `aes`.](images/lab7_synthesis_results.png)
+:::
+
 ### Schematic
 
 Insert schematic image and note component values
@@ -119,9 +129,63 @@ Did you accomplish all of the prescribed tasks? If not, what are the shortcoming
 
 ### Testbench Simulation
 
-Insert waveform screenshots.
+Each new module has a self-checking testbench based on the FIPS-197 Appendix A.1 and B vectors. Figures 13 through 23 show the individual module testbenches. Figure 24 shows the provided sbox latency testbench. Figure 25 shows the sbox latency handled in `aes_datapath`. Figures 26 and 27 show the provided `aes_core` and full-system testbenches.
 
-<!-- TODO -->
+::: {.callout-note collapse="true"}
+## `input_to_state` testbench (click to expand)
+![Figure 13: QuestaSim waveform for `input_to_state_tb`.](images/lab7_input_to_state_tb_waveform.png)
+:::
+
+::: {.callout-note collapse="true"}
+## `state_to_output` testbench (click to expand)
+![Figure 14: QuestaSim waveform for `state_to_output_tb`, including the round trip through both modules.](images/lab7_state_to_output_tb_waveform.png)
+:::
+
+::: {.callout-note collapse="true"}
+## `rotword` testbench (click to expand)
+![Figure 15: QuestaSim waveform for `rotword_tb`.](images/lab7_rotword_tb_waveform.png)
+:::
+
+::: {.callout-note collapse="true"}
+## `addroundkey` testbench (click to expand)
+![Figure 16: QuestaSim waveform for `addroundkey_tb`, covering all 11 round key additions.](images/lab7_addroundkey_tb_waveform.png)
+:::
+
+::: {.callout-note collapse="true"}
+## `shiftrows` testbench (click to expand)
+![Figure 17: QuestaSim waveform for `shiftrows_tb`.](images/lab7_shiftrows_tb_waveform.png)
+:::
+
+::: {.callout-note collapse="true"}
+## `subbytes` testbench (click to expand)
+![Figure 18: QuestaSim waveform for `subbytes_tb`, showing `y` updating on the rising edge after `a` changes.](images/lab7_subbytes_tb_waveform.png)
+:::
+
+::: {.callout-note collapse="true"}
+## `subword` testbench (click to expand)
+![Figure 19: QuestaSim waveform for `subword_tb`, showing `y` updating on the rising edge after `a` changes.](images/lab7_subword_tb_waveform.png)
+:::
+
+::: {.callout-note collapse="true"}
+## `keyexpansion` testbench (click to expand)
+![Figure 20: QuestaSim waveform for `keyexpansion_tb`, showing round keys 0 through 10 in consecutive cycles.](images/lab7_keyexpansion_tb_waveform.png)
+:::
+
+::: {.callout-note collapse="true"}
+## `aes_controller` testbench (click to expand)
+![Figure 21: QuestaSim waveform for `aes_controller_tb`, showing `first` in round 0, `last` in round 10, and `done` holding until the next `load`.](images/lab7_aes_controller_tb_waveform.png)
+:::
+
+::: {.callout-note collapse="true"}
+## `aes_sbox` testbench (click to expand)
+![Figure 22: QuestaSim waveform for the provided `aes_sbox_tb`, showing `y` updating on the rising edge after `a` changes.](images/lab7_aes_sbox_tb_waveform.png)
+:::
+
+![Figure 23: QuestaSim waveform for `aes_datapath_tb`. After the first round, `sb_out` and `roundkey` update on the same rising edges, so each round's state and key arrive at `ark` together.](images/lab7_aes_datapath_tb_waveform.png)
+
+![Figure 24: QuestaSim waveform for the provided `aes_core_tb`.](images/lab7_aes_core_tb_waveform.png)
+
+![Figure 25: QuestaSim waveform for the provided `aes_spi_tb`, showing the key and plaintext shifted in, `done`, and the cyphertext shifted out.](images/lab7_aes_spi_tb_waveform.png)
 
 ## Conclusion
 
