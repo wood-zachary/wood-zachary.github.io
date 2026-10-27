@@ -12,8 +12,8 @@ module aes(input  logic sck,
     logic         int_osc;
     logic [127:0] key, plaintext, cyphertext;
 
-    // Internal high-speed oscillator generating a 48 MHz clock
-    HSOSC hf_osc(
+    // Internal high-speed oscillator generating a 24 MHz clock
+    HSOSC #(.CLKHF_DIV("0b01")) hf_osc(
         .CLKHFPU(1'b1),
         .CLKHFEN(1'b1),
         .CLKHF(int_osc)
