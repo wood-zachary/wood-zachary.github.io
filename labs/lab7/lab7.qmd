@@ -19,13 +19,11 @@ The goal of this lab was to construct and verify a hardware accelerator to perfo
 
 ## Design and Testing Methodology
 
-Designing an AES-128 encryption accelerator for the iCE40UP5K FPGA posed two problems. First, the FPGA has only 5,280 4-input LUTs, which is too few to compute all ten rounds in a single cycle. Therefore, I approached the accelerator similarly to a multicycle processor, with a datapath and a controller hat perform the initial AddRoundKey and ten rounds over 11 cycles. Since the MCU's `load` is asynchronous to the FPGA's `clk`, it passes through a two-stage synchronizer, giving 13 total cycles of latench.
+Designing an AES-128 encryption accelerator for the iCE40UP5K FPGA posed two problems. First, the FPGA has only 5,280 4-input LUTs, which is too few to compute all ten rounds in a single cycle. Therefore, I approached the accelerator similarly to a multicycle processor, with a datapath and a controller that perform the initial AddRoundKey and ten rounds over 11 cycles. Since the MCU's `load` is asynchronous to the FPGA's `clk`, it passes through a two-stage synchronizer, giving 13 total cycles of latency.
 
-Second, the 20 sboxes (16 in SubBytes and 4 in SubWord) are too large to implment in LUTs, so each one uses a block RAM. However, block RAM reads are syncrhonous, so each sbox output is available one cycle after its input. Therefore, I used the SubBytes sbox outputs as the state register so that the read latency forms the boundary between each round. In `keyexpansion`, SubWord acts on the current round key, so its output arrives in the following cycle together with the previous key `prev_key`, which is stored in a register.
+Second, the 20 sboxes (16 in SubBytes and 4 in SubWord) are too large to implement in LUTs, so each one uses a block RAM. However, block RAM reads are synchronous, so each sbox output is available one cycle after its input. Therefore, I used the SubBytes sbox outputs as the state register so that the read latency forms the boundary between each round. In `keyexpansion`, SubWord acts on the current round key, so its output arrives in the following cycle together with the previous key `prev_key`, which is stored in a register.
 
-FIPS 197 Appendices A.1 and B list the round keys and the state after each step of every round. I wrote a self-checking testbench for each module against therse vectors before testing the full system with the provided testbenches. Finally, I verified the design on hardware by comparing the received cyphertext against the expected value in the MCU code and capturing the SPI transaction with a logic analyzer.
-
-<!-- TODO: logic analyzer or oscope -->
+FIPS 197 Appendices A.1 and B list the round keys and the state after each step of every round. I wrote a self-checking testbench for each module against these vectors before testing the full system with the provided testbenches. Finally, I verified the design on hardware by comparing the received cyphertext against the expected value in the MCU code and capturing the SPI transaction with an oscilloscope.
 
 ### Finite State Machines
 
@@ -119,7 +117,7 @@ Two changes from the provided setup were necessary. First, core.clk achieves a m
 
 ### Testbench Simulation
 
-Each new module has a self-checking testbench based on the FIPS-197 Appendix A.1 and B vectors. Figures 13 through 23 show the individual module testbenches. Figure 24 shows the provided sbox latency testbench. Figure 25 shows the sbox latency handled in `aes_datapath`. Figures 26 and 27 show the provided `aes_core` and full-system testbenches.
+Each new module has a self-checking testbench based on the FIPS-197 Appendix A.1 and B vectors. Figures 13 through 21 show the individual module testbenches. Figure 22 shows the provided sbox latency testbench. Figure 23 shows the sbox latency handled in `aes_datapath`. Figures 24 and 25 show the provided `aes_core` and full-system testbenches.
 
 ::: {.callout-note collapse="true"}
 ## `input_to_state` testbench (click to expand)
@@ -177,11 +175,21 @@ Each new module has a self-checking testbench based on the FIPS-197 Appendix A.1
 
 ![Figure 25: QuestaSim waveform for the provided `aes_spi_tb`, showing the key and plaintext shifted in, `done`, and the cyphertext shifted out.](images/lab7_aes_spi_tb_waveform.png)
 
-### Logic Analyzer Trace
+### Oscilloscope Trace
 
-<!-- TODO: save as lab7_spi_logic_analyzer_trace.png -->
+Figure 26 shows the full SPI transaction captured with an oscilloscope. The MCU configures SPI1 with CPOL = 0 and CPHA = 0, so SCK idles low and each bit is changed on the falling edge of SCK and sampled on the rising edge, which matches `aes_spi`. With `load` high, the MCU sends the plaintext and then the key on SDI at 1 MHz MSB-first. When `done` rises, `aes_spi` places `cyphertext[127]` on SDO before the first rising edge, and the MCU reads the cyphertext by sending 16 dummy bytes. Figures 27 and 28 show the first two plaintext bytes (0x32 and 0x43) and the first four cyphertext bytes (0x39, 0x25, 0x84, and 0x1D), which match the FIPS 197 Appendix B test vector.
 
-![Figure 26: Logic analyzer capture of the SPI transaction between the MCU and FPGA, showing the plaintext and key shifted in while `load` is high, `done` rising, and the cyphertext shifted out.](images/lab7_spi_logic_analyzer_trace.png)
+![Figure 26: Oscilloscope capture of the full SPI transaction.](images/lab7_oscilloscope_full_transaction.png)
+
+::: {.callout-note collapse="true"}
+## First two plaintext bytes (click to expand)
+![Figure 27: Oscilloscope capture of the first two plaintext bytes.](images/lab7_oscilloscope_plaintext_start.png)
+:::
+
+::: {.callout-note collapse="true"}
+## End of load and start of readout (click to expand)
+![Figure 28: Oscilloscope capture of the last two key bytes and the first four cyphertext bytes.](images/lab7_oscilloscope_cyphertext_start.png)
+:::
 
 ## Conclusion
 
@@ -189,10 +197,8 @@ The design receives `key` and `plaintext` from the MCU when it asserts `load` an
 
 ::: {.callout-note collapse="true"}
 ## Hours spent (click to expand)
-I spent about 19 hours on this lab. For instructor reference, I spent 2 hours working through the provided materials, 1 hour writing module and testbench templates/stubs, 8 hours drawing block diagrams, 2 hours capturing testbench waveforms, 1 hour capturing the SPI communication with the logic analyzer or oscilloscope, 2 hours synthesizing my design and debugging hardware, and then 3 hours completing the AI prototype and writing this lab report.
+I spent about 21 hours on this lab. For instructor reference, I spent 2 hours working through the provided materials, 1 hour writing module and testbench templates/stubs, 8 hours drawing block diagrams, 2 hours capturing testbench waveforms, 3 hours capturing and annotating the SPI communication with an oscilloscope, 2 hours synthesizing my design and debugging hardware, and then 3 hours completing the AI prototype and writing the lab report.
 :::
-
-<!-- TODO: logic analyzer or oscope -->
 
 ## AI Prototype Summary
 
@@ -926,6 +932,6 @@ endmodule
 ```
 :::
 
-Reflection: these prototypes contained a handful of constructs that I have not used before in my own designs, including packages, -: for indexed variable part-selects, and .name() for enum variables. Prototype A seems to work properly but, as requested, is purely combinational and depends on a combinational sub_word with `word_in`/`word_out` ports instead of a sub_word with a cycle of latency. Prototype B also seems fine and handles the pseudocode propely but its configuration doesn't match AES. It defaulted to `NK = 8` and `NR = 6`, while AES-128 is `NK = 4` and `NR = 10`. It also takes `rcon` as an input array instead of generating it and stores every expanded word in registers, which would take many logic cells. 
+Reflection: these prototypes contained a handful of constructs that I have not used before in my own designs, including packages, -: for indexed variable part-selects, and .name() for enum variables. Prototype A seems to work properly but, as requested, is purely combinational and depends on a combinational sub_word with `word_in`/`word_out` ports instead of a sub_word with a cycle of latency. Prototype B also seems fine and handles the pseudocode properly but its configuration doesn't match AES. It defaulted to `NK = 8` and `NR = 6`, while AES-128 is `NK = 4` and `NR = 10`. It also takes `rcon` as an input array instead of generating it and stores every expanded word in registers, which would take many logic cells. 
 
 Withholding the specifications did not visibly hurt the HDL itself, but important constants and design choices from the specifications were lost.
