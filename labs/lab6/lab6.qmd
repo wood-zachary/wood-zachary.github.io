@@ -2,8 +2,7 @@
 title: "Lab 6: The Internet of Things and Serial Peripheral Interface"
 author: "Zachary Wood"
 date: "10/26/26"
-# TODO: replace with the annotated logic analyzer capture
-image: images/lab6_schematic.png
+image: images/lab6_oscilloscope_trace.png
 categories:
   - labreport
 draft: false
@@ -47,11 +46,15 @@ I also wrote a `DS1722` library from the DS1722 datasheet. Its header defines th
 
 The DS1722 powers up in shutdown mode (SD = 1), so `initDS1722()` must clear SD to start continuous conversions. E0h sets the three fixed upper bits, selects 8-bit resolution, and clears 1SHOT and SD.
 
-`lab6_zw.c` follows the structure of the starter code's main program. The main loop waits for a newline-terminated request from the ESP8266 on USART1 at 125000 baud and searches it with `strstr()` for the tags `ledon` and `ledoff`, which set the LED on PA6 with `digitalWrite()`, and `res8` through `res12`, which call `setResolution()`. It then reads the temperature and resolution from the sensor and sends the page: a form button for each LED state and each resolution, the LED state, and the temperature with its resolution. The resolution on the page comes from `getResolution()`, which reads the configuration register back, so the page shows the sensor's actual setting rather than the last request. The temperature is printed with four decimal places to match the 0.0625 °C step at 12 bits.
+`lab6_zw.c` follows the structure of the starter code's main program. The main loop waits for a newline-terminated request from the ESP8266 on USART1 at 125000 baud and searches it with `strstr()` for the tags `ledon` and `ledoff`, which set the LED on PA6 with `digitalWrite()`, and `res8` through `res12`, which call `setResolution()`. It then reads the temperature and resolution from the sensor and sends the page: a form button for each LED state and each resolution, the LED state, and the temperature with its resolution. The resolution on the page comes from `getResolution()`, which reads the configuration register back, so the page shows the sensor's actual setting rather than the last request.
 
 ### Testing
 
-<!-- TODO: check CE, SCLK, and SDI on the logic analyzer with the sensor disconnected, then connect the DS1722 and check SDO. Check room temperature and temperature holding the sensor between my fingers. Already checked LED functionality.  -->
+I tested the LED by pressing each button and checking that D4 and the LED status on the page changed.
+
+To debug the SPI link, I wrote test firmware that wrote each configuration value to the DS1722, read it back, and printed the result to the SEGGER debug terminal. The values were corrupted until I fixed two wiring errors: SERMODE and VDDA were tied to ground, and the sensor was powered from 5 V instead of 3.3 V. After that, every value read back correctly.
+
+On the webpage, each resolution button changed the resolution shown on the page and the number of decimal places in the temperature. The temperature read about 24 °C at room temperature and rose when I pressed my finger against it.
 
 ## Technical Documentation
 
@@ -63,67 +66,25 @@ Figure 1 shows the schematic of the physical circuit. On-board components, inclu
 
 ![Figure 1: Schematic of the physical circuit.](images/lab6_schematic.png)
 
-The DS1722 requires no external components. Its digital supply VDDD (1.8 V to 5.5 V) and analog supply VDDA (2.65 V to 5.5 V) are both tied to 3.3 V, as well as SERMODE, which makes the chip select the SPI interface. Tying it to ground would instead select the 3-wire interface. CE is driven by PA8 as a GPIO output, and SCLK, SDI, and SDO connect to SPI1's SCK (PB3), MOSI (PB5), and MISO (PB4), respectively.
-
-<!-- TODO: maybe fix DS1722_CE declaration. -->
+The DS1722 requires no external components. Its digital supply VDDD (1.8 V to 5.5 V) and analog supply VDDA (2.65 V to 5.5 V) are both tied to 3.3 V, as well as SERMODE, which makes the chip select the SPI interface. Tying it to ground would instead select the 3-wire interface. CE is driven by PB1 as a GPIO output, and SCLK, SDI, and SDO connect to SPI1's SCK (PB3), MOSI (PB5), and MISO (PB4), respectively.
 
 The ESP8266 click board plugs into the development board's mikroBUS socket (U5). The socket routes its TX and RX pins to USART1 on PA9 and PA10, respectively, and the socket's TX and RX labels name the MCU's side of each line, so the click board receives on the socket's TX pin and transmits on its RX pin. The click's reset pin connects to the socket's RST pin, which jumper J2 selects between a 10 kΩ pull-up to 3.3 V (R3, pins 1-2) and PA12 (pins 2-3). J2 is set to pins 1-2, which holds the reset line high so the ESP8266 runs whenever it is powered.
 
 The LED is the development board's D4, driven by PA6 through its 1 kΩ series resistor R7. The MCU/FPGA DIP switch SW7 is set open, which disconnects PA10, PA9, PA5, PA6, PA11, PB5, PB4, and PB3 from the FPGA.
 
-#### Calculations
+### Oscilloscope Trace
 
-**SPI clock.** SPI1 is clocked by PCLK2 at 80 MHz, and BR = 100 selects a divider of $2^{BR+1} = 32$, so
+![Figure 2: Oscilloscope trace of a full SPI read transaction (CE, SCK, SDO and SDI). This transaction is a configuration reading returning E0h.](images/lab6_oscilloscope_trace.png)
 
-$$f_{SCK} = \frac{80\text{ MHz}}{32} = 2.5\text{ MHz}$$
-
-which is below the DS1722's 5.0 MHz maximum. Each half period lasts 200 ns, twice the 100 ns minimum SCLK high and low times. A two-byte register access takes 16 clock periods, or $6.4\ \mu\text{s}$.
-
-**Resolution.** From Table 5 of DS1722:
-
-| Resolution | R2:R0 | Configuration byte | Step | Max conversion time |
-|---|---|---|---|---|
-| 8 bits | 000 | E0h | 1.0 °C | 75 ms |
-| 9 bits | 001 | E2h | 0.5 °C | 150 ms |
-| 10 bits | 010 | E4h | 0.25 °C | 300 ms |
-| 11 bits | 011 | E6h | 0.125 °C | 600 ms |
-| 12 bits | 100 | E8h | 0.0625 °C | 1.2 s |
-
-**Temperature range.** The temperature register holds a 16-bit two's complement value $N = \{\text{MSB}, \text{LSB}\}$ with the integer part in the MSB and the fraction in the upper bits of the LSB (Table 3), and
-
-$$T = \frac{N}{256}\ ^\circ\text{C}$$
-
-For example, Table 3 lists -10.125 °C as F5E0h, which is $-2592$ as a signed 16-bit value, and $-2592 / 256 = -10.125$. The ends of the required range are -10 °C, or F600h ($N = -2560$), and 30 °C, or 1E00h ($N = 7680$). A signed 16-bit value spans -128 °C to 127.996 °C, which covers the sensor's full -55 °C to +120 °C range at every resolution, since lower resolutions only clear the low bits of the LSB. `readTemperature()` stores the word in an `int16_t`, so the sign bit S becomes the sign of the result and negative temperatures convert correctly.
-
-### Logic Analyzer Capture
-
-Signals are named from the DS1722's side: SDI is the MCU's MOSI (PB5), and SDO is its MISO (PB4). During a read, the MCU sends the register address on SDI while SDO stays high impedance, then sends 00h while the DS1722 shifts the register's contents out on SDO.
-
-<!-- TODO: add the capture. -->
-
-The table below compares the timing in Figure 2 with the DS1722's AC electrical characteristics for the SPI interface.
-
-| Parameter | Symbol | DS1722 requirement | Measured |
-|---|---|---|---|
-| SCLK frequency | $t_{CLK}$ | 5.0 MHz max | |
-| SCLK high and low time | $t_{CH}$, $t_{CL}$ | 100 ns min | |
-| CE to SCLK setup | $t_{CC}$ | 400 ns min | |
-| SCLK to CE hold | $t_{CCH}$ | 100 ns min | |
-| CE inactive time | $t_{CWH}$ | 400 ns min | |
-
-## Results and Discussion
-
-<!-- TODO -->
 
 ## Conclusion
 
-The design reads a DS1722 temperature sensor over SPI with a CMSIS-based driver and serves the temperature, an LED control, and a resolution control on a webpage through an ESP8266.
-
-<!-- TODO: how the design performed. -->
+The design reads a DS1722 temperature sensor over SPI with a CMSIS-based driver and serves the temperature, an LED control, and a resolution control on a webpage through an ESP8266 server.
 
 ::: {.callout-note collapse="true"}
 ## Hours spent (click to expand)
-<!-- TODO: total hours and breakdown. -->
+
+I spent about 15 hours on this lab. For instructor reference, I spent 4 hours writing the two libraries, 2 hours writing lab6_zw and main.h, 1 hour drawing the schematic, 5 hours debugging hardware (I was powering the temperature sensor with the 5V supply instead of the 3V supply), and then 3 hours capturing the oscilloscope trace, reviewing the AI prototype, and writing the lab report.
 :::
 
 ## AI Prototype Summary
@@ -135,7 +96,7 @@ The purpose of this AI prototype is to test whether an LLM writes better fronten
 I'm making a web portal to interface with a temperature sensor. Create a HTML page that looks good and is intuitive to show the temperature, control an LED, and change the precision of the readout.
 :::
 
-The LLM returned a single HTML file with inline CSS and JavaScript and no external dependencies. It assumed that the device serves a JSON API from the same origin as the page, with `GET /api/temperature`, `GET /api/led`, and `PUT /api/led`, and the page polls the temperature once per second. It interpreted "precision" as the number of decimal places shown, from 0 to 3. It noted that this setting does not change the sensor's resolution and suggested adding a `PUT /api/resolution`. Opening it with `?demo` replaces the device with a simulated sensor and LED. In its integration notes, it said that the page must be served by the device, that an API on a different origin would need CORS headers, and that polling suits small HTTP servers.
+The LLM returned a single HTML file with inline CSS and JavaScript and no external dependencies. It assumed that the device serves a JSON API from the same origin as the page, with `GET /api/temperature`, `GET /api/led`, and `PUT /api/led`, and the page polls the temperature once per second. It interpreted "precision" as the number of decimal places shown, from 0 to 3, and noted that this setting does not change the sensor's resolution and suggested adding a `PUT /api/resolution`. Opening it with `?demo` replaces the device with a simulated sensor and LED. In its integration notes, it said that the page must be served by the device, that an API on a different origin would need CORS headers, and that polling suits small HTTP servers.
 
 ::: {.callout-tip collapse="true"}
 ## Generated webpage
@@ -884,16 +845,12 @@ init();
 ```
 :::
 
-<!-- TODO: test this. -->
-
 ::: {.callout-tip collapse="true"}
 ## Prompt 2 (Claude Opus 5.5, incognito, medium effort)
 Write me a C function to carry out a SPI transaction to retrieve a temperature reading from a DS1722 sensor. Make use of CMSIS libraries for the STM32L432KC.
 :::
 
-The LLM stated that it had fetched and read the DS1722 and STM32L432KC datasheets and that it had not compiled or run the code. It assumed SPI1 on PA5, PA6, and PA7 (AF5) with CE on PB0 as a GPIO output. It listed each datasheet value the code relies on, including the register addresses, the configuration register layout, CPHA = 1, the 5.0 MHz maximum SCLK, and the CE timing minimums, with the table or section each came from.
-
-Its driver computes the baud rate divider from the actual PCLK2 frequency to keep SCLK at or below 5 MHz, enforces the CE setup, hold, and inactive times with delays from the DWT cycle counter, and times out every wait on an SPI flag. Initialization writes 12-bit continuous conversion and reads the configuration register back to verify it. A temperature read reads the LSB and then the MSB and returns it as a fixed-point value in units of 1/256 °C with a separate function to convert it to a float. It ended with a list of items to confirm, including the register names, the CMSIS 6 replacement for `CoreDebug`, the pin mapping, the Nucleo solder bridges, and the CE timing on a logic analyzer.
+The LLM listed each datasheet value the code relies on, including the register addresses, the configuration register layout, CPHA = 1, the 5.0 MHz maximum SCLK, and the CE timing minimums, with the table or section each came from, and it ended with a list of items to confirm, including the register names, the CMSIS 6 replacement for `CoreDebug`, the pin mapping, the Nucleo solder bridges, and the CE timing on a logic analyzer.
 
 ::: {.callout-tip collapse="true"}
 ## Generated DS1722 driver
@@ -1256,4 +1213,4 @@ int main(void)
 ```
 :::
 
-<!-- TODO: test this. -->
+My LLM did not write better frontend code than embedded C. Its driver matched the datasheet and reference manual details that I used in my driver. While the page looked okay, it relied on a JSON API that the ESP8266 server can't provide since it forwards each request to the MCU and returns the MCU's HTML.
