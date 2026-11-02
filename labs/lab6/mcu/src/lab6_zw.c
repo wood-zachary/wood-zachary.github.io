@@ -27,8 +27,7 @@ int inString(char request[], char des[]) {
 	return -1;
 }
 
-int updateLEDStatus(char request[], int led_status)
-{
+int updateLEDStatus(char request[], int led_status) {
 	if (inString(request, REQ_LED_OFF) == 1) {
 		digitalWrite(LED_PIN, PIO_LOW);
 		led_status = 0;
@@ -41,27 +40,19 @@ int updateLEDStatus(char request[], int led_status)
 	return led_status;
 }
 
-int updateTempResolution(char request[], int temp_resolution)
-{
+void updateTempResolution(char request[]) {
     // setResolution is in each branch to prevent unnecessary updating
 	if (inString(request, REQ_RES_8) == 1) {
-		temp_resolution = 8;
-        setResolution(temp_resolution);
+        setResolution(8);
 	} else if (inString(request, REQ_RES_9) == 1) {
-		temp_resolution = 9;
-        setResolution(temp_resolution);
+        setResolution(9);
 	} else if (inString(request, REQ_RES_10) == 1) {
-		temp_resolution = 10;
-        setResolution(temp_resolution);
+        setResolution(10);
 	} else if (inString(request, REQ_RES_11) == 1) {
-		temp_resolution = 11;
-        setResolution(temp_resolution);
+        setResolution(11);
 	} else if (inString(request, REQ_RES_12) == 1) {
-		temp_resolution = 12;
-        setResolution(temp_resolution);
+        setResolution(12);
 	}
-
-	return temp_resolution;
 }
 
 int main(void) {
@@ -69,7 +60,7 @@ int main(void) {
     configureClock();
 
     int led_status = 1;
-    int temp_resolution = 8;
+    int resolution = 8;
 
     gpioEnable(gpioPinToPort(LED_PIN));
     pinMode(LED_PIN, GPIO_OUTPUT);
@@ -80,7 +71,7 @@ int main(void) {
     initSPI(SPI_BR, SPI_CPOL, SPI_CPHA);
 
     initDS1722();
-    setResolution(temp_resolution);
+    setResolution(resolution);
 
     while (1) {
         /* Wait for ESP8266 to send a request.
@@ -101,9 +92,10 @@ int main(void) {
 
         // Read temperature over SPI
         char tempStr[100];
-        temp_resolution = updateTempResolution(request, temp_resolution);
-        sprintf(tempStr, "The temperature is %.4f degrees Celsius with %d-bit resolution",
-                readTemperature(), getResolution());
+        updateTempResolution(request);
+        resolution = getResolution();
+        sprintf(tempStr, "The temperature is %.*f degrees Celsius with %d-bit resolution",
+                resolution - 8, readTemperature(), resolution);
         
         // Update string with current LED state
         led_status = updateLEDStatus(request, led_status);
